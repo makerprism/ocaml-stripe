@@ -307,6 +307,141 @@ let test_error_type_variants () =
   check bool "rate_limit_error" true (Core.error_type_of_string "rate_limit_error" = Core.Rate_limit_error);
   check bool "unknown defaults to Api_error" true (Core.error_type_of_string "unknown" = Core.Api_error)
 
+(** Test PaymentMethod parsing *)
+let test_payment_method_parsing () =
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "pm_123",
+      "object": "payment_method",
+      "billing_details": {"address": null, "email": null, "name": null, "phone": null},
+      "card": {
+        "brand": "visa",
+        "exp_month": 12,
+        "exp_year": 2025,
+        "last4": "4242"
+      },
+      "created": 1694725031,
+      "customer": "cus_123",
+      "livemode": false,
+      "type": "card"
+    }
+  |} in
+  let pm = Payment_method.of_json json in
+  check string "id" "pm_123" pm.id;
+  check string "object" "payment_method" pm.object_;
+  check string "type" "card" pm.type_;
+  check (option string) "customer" (Some "cus_123") pm.customer;
+  match pm.card with
+  | Some card ->
+    check string "card brand" "visa" card.brand;
+    check string "card last4" "4242" card.last4;
+    check int "card exp_month" 12 card.exp_month;
+    check int "card exp_year" 2025 card.exp_year
+  | None -> fail "Expected card to be present"
+
+(** Test SetupIntent parsing *)
+let test_setup_intent_parsing () =
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "seti_123",
+      "object": "setup_intent",
+      "client_secret": "seti_123_secret_456",
+      "created": 1694725031,
+      "customer": "cus_123",
+      "description": "Setup for subscription",
+      "livemode": false,
+      "payment_method": "pm_123",
+      "status": "succeeded",
+      "usage": "off_session"
+    }
+  |} in
+  let si = Setup_intent.of_json json in
+  check string "id" "seti_123" si.id;
+  check string "object" "setup_intent" si.object_;
+  check (option string) "client_secret" (Some "seti_123_secret_456") si.client_secret;
+  check (option string) "customer" (Some "cus_123") si.customer;
+  check bool "status is Succeeded" true (si.status = Setup_intent.Succeeded)
+
+(** Test Coupon parsing *)
+let test_coupon_parsing () =
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "coupon_123",
+      "object": "coupon",
+      "amount_off": null,
+      "created": 1694725031,
+      "currency": null,
+      "duration": "repeating",
+      "duration_in_months": 3,
+      "livemode": false,
+      "max_redemptions": 100,
+      "name": "25% off",
+      "percent_off": 25.0,
+      "times_redeemed": 10,
+      "valid": true
+    }
+  |} in
+  let coupon = Coupon.of_json json in
+  check string "id" "coupon_123" coupon.id;
+  check string "object" "coupon" coupon.object_;
+  check bool "duration is Repeating" true (coupon.duration = Coupon.Repeating);
+  check (option int) "duration_in_months" (Some 3) coupon.duration_in_months;
+  check (option string) "name" (Some "25% off") coupon.name;
+  check bool "valid" true coupon.valid;
+  check int "times_redeemed" 10 coupon.times_redeemed
+
+(** Test BalanceTransaction parsing *)
+let test_balance_transaction_parsing () =
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "txn_123",
+      "object": "balance_transaction",
+      "amount": 1000,
+      "available_on": 1694725031,
+      "created": 1694725031,
+      "currency": "usd",
+      "description": "Charge for order",
+      "fee": 59,
+      "net": 941,
+      "source": "ch_123",
+      "status": "available",
+      "type": "charge"
+    }
+  |} in
+  let txn = Balance_transaction.of_json json in
+  check string "id" "txn_123" txn.id;
+  check string "object" "balance_transaction" txn.object_;
+  check int "amount" 1000 txn.amount;
+  check int "fee" 59 txn.fee;
+  check int "net" 941 txn.net;
+  check string "status" "available" txn.status;
+  check string "type" "charge" txn.type_
+
+(** Test Payout parsing *)
+let test_payout_parsing () =
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "po_123",
+      "object": "payout",
+      "amount": 10000,
+      "arrival_date": 1694725031,
+      "created": 1694725031,
+      "currency": "usd",
+      "description": "STRIPE PAYOUT",
+      "destination": "ba_123",
+      "livemode": false,
+      "method": "standard",
+      "status": "paid",
+      "type": "bank_account"
+    }
+  |} in
+  let payout = Payout.of_json json in
+  check string "id" "po_123" payout.id;
+  check string "object" "payout" payout.object_;
+  check int "amount" 10000 payout.amount;
+  check string "status" "paid" payout.status;
+  check string "type" "bank_account" payout.type_
+
 let () =
   run "Stripe" [
     "Customer", [
@@ -341,5 +476,20 @@ let () =
     ];
     "Subscription", [
       test_case "status variants" `Quick test_subscription_status_variants;
+    ];
+    "PaymentMethod", [
+      test_case "parsing" `Quick test_payment_method_parsing;
+    ];
+    "SetupIntent", [
+      test_case "parsing" `Quick test_setup_intent_parsing;
+    ];
+    "Coupon", [
+      test_case "parsing" `Quick test_coupon_parsing;
+    ];
+    "BalanceTransaction", [
+      test_case "parsing" `Quick test_balance_transaction_parsing;
+    ];
+    "Payout", [
+      test_case "parsing" `Quick test_payout_parsing;
     ];
   ]

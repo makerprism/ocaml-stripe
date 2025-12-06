@@ -543,6 +543,264 @@ module Invoice = struct
   let to_json t = t.raw
 end
 
+(** PaymentMethod resource *)
+module Payment_method = struct
+  type card = {
+    brand : string;
+    exp_month : int;
+    exp_year : int;
+    last4 : string;
+  }
+
+  let card_of_json json =
+    let open Yojson.Safe.Util in
+    {
+      brand = json |> member "brand" |> to_string;
+      exp_month = json |> member "exp_month" |> to_int;
+      exp_year = json |> member "exp_year" |> to_int;
+      last4 = json |> member "last4" |> to_string;
+    }
+
+  type t = {
+    id : string;
+    object_ : string;
+    billing_details : Yojson.Safe.t;
+    card : card option;
+    created : int;
+    customer : string option;
+    livemode : bool;
+    type_ : string;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      billing_details = json |> member "billing_details";
+      card = (
+        let c = json |> member "card" in
+        if c = `Null then None else Some (card_of_json c)
+      );
+      created = json |> member "created" |> to_int;
+      customer = json |> member "customer" |> to_string_option;
+      livemode = json |> member "livemode" |> to_bool;
+      type_ = json |> member "type" |> to_string;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** SetupIntent resource *)
+module Setup_intent = struct
+  type status =
+    | Requires_payment_method
+    | Requires_confirmation
+    | Requires_action
+    | Processing
+    | Canceled
+    | Succeeded
+
+  let status_of_string = function
+    | "requires_payment_method" -> Requires_payment_method
+    | "requires_confirmation" -> Requires_confirmation
+    | "requires_action" -> Requires_action
+    | "processing" -> Processing
+    | "canceled" -> Canceled
+    | "succeeded" -> Succeeded
+    | _ -> Requires_payment_method
+
+  type t = {
+    id : string;
+    object_ : string;
+    client_secret : string option;
+    created : int;
+    customer : string option;
+    description : string option;
+    livemode : bool;
+    payment_method : string option;
+    status : status;
+    usage : string;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      client_secret = json |> member "client_secret" |> to_string_option;
+      created = json |> member "created" |> to_int;
+      customer = json |> member "customer" |> to_string_option;
+      description = json |> member "description" |> to_string_option;
+      livemode = json |> member "livemode" |> to_bool;
+      payment_method = json |> member "payment_method" |> to_string_option;
+      status = json |> member "status" |> to_string |> status_of_string;
+      usage = json |> member "usage" |> to_string_option |> Option.value ~default:"off_session";
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** Coupon resource *)
+module Coupon = struct
+  type duration = Once | Repeating | Forever
+
+  let duration_of_string = function
+    | "once" -> Once
+    | "repeating" -> Repeating
+    | "forever" -> Forever
+    | _ -> Once
+
+  type t = {
+    id : string;
+    object_ : string;
+    amount_off : int option;
+    created : int;
+    currency : string option;
+    duration : duration;
+    duration_in_months : int option;
+    livemode : bool;
+    max_redemptions : int option;
+    name : string option;
+    percent_off : float option;
+    times_redeemed : int;
+    valid : bool;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      amount_off = json |> member "amount_off" |> to_int_option;
+      created = json |> member "created" |> to_int;
+      currency = json |> member "currency" |> to_string_option;
+      duration = json |> member "duration" |> to_string |> duration_of_string;
+      duration_in_months = json |> member "duration_in_months" |> to_int_option;
+      livemode = json |> member "livemode" |> to_bool;
+      max_redemptions = json |> member "max_redemptions" |> to_int_option;
+      name = json |> member "name" |> to_string_option;
+      percent_off = json |> member "percent_off" |> to_float_option;
+      times_redeemed = json |> member "times_redeemed" |> to_int;
+      valid = json |> member "valid" |> to_bool;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** Discount resource *)
+module Discount = struct
+  type t = {
+    id : string;
+    object_ : string;
+    coupon : Coupon.t;
+    customer : string option;
+    start : int;
+    end_ : int option;
+    subscription : string option;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      coupon = json |> member "coupon" |> Coupon.of_json;
+      customer = json |> member "customer" |> to_string_option;
+      start = json |> member "start" |> to_int;
+      end_ = json |> member "end" |> to_int_option;
+      subscription = json |> member "subscription" |> to_string_option;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** BalanceTransaction resource *)
+module Balance_transaction = struct
+  type t = {
+    id : string;
+    object_ : string;
+    amount : int;
+    available_on : int;
+    created : int;
+    currency : string;
+    description : string option;
+    fee : int;
+    net : int;
+    source : string option;
+    status : string;
+    type_ : string;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      amount = json |> member "amount" |> to_int;
+      available_on = json |> member "available_on" |> to_int;
+      created = json |> member "created" |> to_int;
+      currency = json |> member "currency" |> to_string;
+      description = json |> member "description" |> to_string_option;
+      fee = json |> member "fee" |> to_int;
+      net = json |> member "net" |> to_int;
+      source = json |> member "source" |> to_string_option;
+      status = json |> member "status" |> to_string;
+      type_ = json |> member "type" |> to_string;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** Payout resource *)
+module Payout = struct
+  type t = {
+    id : string;
+    object_ : string;
+    amount : int;
+    arrival_date : int;
+    created : int;
+    currency : string;
+    description : string option;
+    destination : string option;
+    livemode : bool;
+    method_ : string;
+    status : string;
+    type_ : string;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      amount = json |> member "amount" |> to_int;
+      arrival_date = json |> member "arrival_date" |> to_int;
+      created = json |> member "created" |> to_int;
+      currency = json |> member "currency" |> to_string;
+      description = json |> member "description" |> to_string_option;
+      destination = json |> member "destination" |> to_string_option;
+      livemode = json |> member "livemode" |> to_bool;
+      method_ = json |> member "method" |> to_string;
+      status = json |> member "status" |> to_string;
+      type_ = json |> member "type" |> to_string;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
 (** List response wrapper *)
 module List_response = struct
   type 'a t = {
