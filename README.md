@@ -259,6 +259,7 @@ The SDK follows a runtime-agnostic design:
 | Resource | Type | Client | Other |
 |----------|:----:|:------:|-------|
 | Customer | ✅ | ✅ | |
+| CustomerBalanceTransaction | ✅ | ✅ | |
 | Subscription | ✅ | ✅ | |
 | SubscriptionItem | ✅ | ✅ | create_usage_record |
 | SubscriptionSchedule | ✅ | ✅ | cancel, release |
@@ -272,6 +273,7 @@ The SDK follows a runtime-agnostic design:
 | PromotionCode | ✅ | ✅ | |
 | TaxRate | ✅ | ✅ | |
 | UsageRecord | ✅ | ✅ | (via SubscriptionItem) |
+| BillingPortalSession | ✅ | ✅ | |
 
 #### Connect & Payouts
 

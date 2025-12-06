@@ -1534,3 +1534,67 @@ module Deleted = struct
       deleted = json |> member "deleted" |> to_bool;
     }
 end
+
+(** Billing Portal Session resource *)
+module Billing_portal_session = struct
+  type t = {
+    id : string;
+    object_ : string;
+    created : int;
+    customer : string;
+    livemode : bool;
+    return_url : string;
+    url : string;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      created = json |> member "created" |> to_int;
+      customer = json |> member "customer" |> to_string;
+      livemode = json |> member "livemode" |> to_bool;
+      return_url = json |> member "return_url" |> to_string;
+      url = json |> member "url" |> to_string;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** Customer Balance Transaction resource *)
+module Customer_balance_transaction = struct
+  type t = {
+    id : string;
+    object_ : string;
+    amount : int;
+    created : int;
+    currency : string;
+    customer : string;
+    description : string option;
+    ending_balance : int;
+    livemode : bool;
+    type_ : string;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      amount = json |> member "amount" |> to_int;
+      created = json |> member "created" |> to_int;
+      currency = json |> member "currency" |> to_string;
+      customer = json |> member "customer" |> to_string;
+      description = json |> member "description" |> to_string_option;
+      ending_balance = json |> member "ending_balance" |> to_int;
+      livemode = json |> member "livemode" |> to_bool;
+      type_ = json |> member "type" |> to_string;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end

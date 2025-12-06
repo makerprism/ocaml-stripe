@@ -888,6 +888,52 @@ let test_subscription_schedule_parsing () =
   check string "status" "active" ss.status;
   check string "end_behavior" "release" ss.end_behavior
 
+let test_billing_portal_session_parsing () =
+  let open Stripe.Billing_portal_session in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "bps_123",
+      "object": "billing_portal.session",
+      "created": 1234567890,
+      "customer": "cus_123",
+      "livemode": false,
+      "return_url": "https://example.com/account",
+      "url": "https://billing.stripe.com/session/xxx"
+    }
+  |} in
+  let bps = of_json json in
+  check string "id" "bps_123" bps.id;
+  check string "object" "billing_portal.session" bps.object_;
+  check string "customer" "cus_123" bps.customer;
+  check string "return_url" "https://example.com/account" bps.return_url;
+  check string "url" "https://billing.stripe.com/session/xxx" bps.url
+
+let test_customer_balance_transaction_parsing () =
+  let open Stripe.Customer_balance_transaction in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "cbtxn_123",
+      "object": "customer_balance_transaction",
+      "amount": -500,
+      "created": 1234567890,
+      "currency": "usd",
+      "customer": "cus_123",
+      "description": "Referral credit",
+      "ending_balance": 1500,
+      "livemode": false,
+      "type": "adjustment"
+    }
+  |} in
+  let cbt = of_json json in
+  check string "id" "cbtxn_123" cbt.id;
+  check string "object" "customer_balance_transaction" cbt.object_;
+  check int "amount" (-500) cbt.amount;
+  check string "currency" "usd" cbt.currency;
+  check string "customer" "cus_123" cbt.customer;
+  check (option string) "description" (Some "Referral credit") cbt.description;
+  check int "ending_balance" 1500 cbt.ending_balance;
+  check string "type" "adjustment" cbt.type_
+
 let () =
   run "Stripe" [
     "Customer", [
@@ -991,5 +1037,11 @@ let () =
     ];
     "SubscriptionSchedule", [
       test_case "parsing" `Quick test_subscription_schedule_parsing;
+    ];
+    "BillingPortalSession", [
+      test_case "parsing" `Quick test_billing_portal_session_parsing;
+    ];
+    "CustomerBalanceTransaction", [
+      test_case "parsing" `Quick test_customer_balance_transaction_parsing;
     ];
   ]

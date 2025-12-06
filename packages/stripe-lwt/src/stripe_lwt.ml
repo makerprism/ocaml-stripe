@@ -1650,4 +1650,94 @@ module Client = struct
       get ~config ~path:"/v1/subscription_schedules" ~params () >>=
       handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
   end
+
+  (** Billing Portal Session API *)
+  module Billing_portal_session = struct
+    open Stripe.Billing_portal_session
+
+    (** Create a billing portal session.
+        @param customer The ID of the customer to create a session for
+        @param return_url URL to redirect to after the portal session ends
+        @param configuration Optional portal configuration ID
+        @param flow_data Optional flow data for specific portal flows
+        @param locale Optional locale for the portal (e.g., "en", "fr")
+        @param on_behalf_of Optional connected account ID (for Connect) *)
+    let create ~config ~customer ~return_url 
+        ?idempotency_key ?configuration ?locale ?on_behalf_of () =
+      let options = { default_request_options with idempotency_key } in
+      let params = [
+        ("customer", customer);
+        ("return_url", return_url);
+      ] in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("configuration", v)) configuration;
+        Option.map (fun v -> ("locale", v)) locale;
+        Option.map (fun v -> ("on_behalf_of", v)) on_behalf_of;
+      ] in
+      post ~config ~options ~path:"/v1/billing_portal/sessions" ~params () >>=
+      handle_response ~parse_ok:of_json
+  end
+
+  (** Customer Balance Transaction API *)
+  module Customer_balance_transaction = struct
+    open Stripe.Customer_balance_transaction
+
+    (** Create a customer balance transaction (adjust customer credit balance).
+        @param customer_id The ID of the customer
+        @param amount Amount in cents (positive = credit, negative = debit)
+        @param currency Three-letter ISO currency code
+        @param description Optional description for the transaction *)
+    let create ~config ~customer_id ~amount ~currency 
+        ?idempotency_key ?description ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = [
+        ("amount", string_of_int amount);
+        ("currency", currency);
+      ] in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("description", v)) description;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options 
+        ~path:(Printf.sprintf "/v1/customers/%s/balance_transactions" customer_id) 
+        ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    (** Retrieve a customer balance transaction *)
+    let retrieve ~config ~customer_id ~transaction_id () =
+      get ~config 
+        ~path:(Printf.sprintf "/v1/customers/%s/balance_transactions/%s" 
+                 customer_id transaction_id) () >>=
+      handle_response ~parse_ok:of_json
+
+    (** Update a customer balance transaction *)
+    let update ~config ~customer_id ~transaction_id ?description ?metadata () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("description", v)) description;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config 
+        ~path:(Printf.sprintf "/v1/customers/%s/balance_transactions/%s" 
+                 customer_id transaction_id) 
+        ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    (** List customer balance transactions *)
+    let list ~config ~customer_id ?limit ?starting_after ?ending_before () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("ending_before", v)) ending_before;
+      ] in
+      get ~config 
+        ~path:(Printf.sprintf "/v1/customers/%s/balance_transactions" customer_id) 
+        ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
 end
