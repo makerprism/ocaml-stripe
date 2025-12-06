@@ -116,8 +116,7 @@ let generate_idempotency_key () =
 
 (** Build authorization header *)
 let auth_header config =
-  let credentials = Base64.encode_string config.api_key in
-  ("Authorization", "Basic " ^ credentials ^ ":")
+  ("Authorization", "Bearer " ^ config.api_key)
 
 (** Build common headers for Stripe API requests *)
 let build_headers ?(options = default_request_options) config =
@@ -158,12 +157,6 @@ type 'a list_response = {
 
 (** Result type for API calls *)
 type 'a api_result = ('a, stripe_error) result
-
-module Base64 = struct
-  let encode_string s =
-    (* Simple base64 encoding - in real implementation use base64 library *)
-    Base64.encode_string s
-end
 
 (** Webhook signature verification error *)
 type signature_verification_error = {

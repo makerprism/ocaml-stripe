@@ -1165,6 +1165,342 @@ module Review = struct
   let to_json t = t.raw
 end
 
+(** PromotionCode resource *)
+module Promotion_code = struct
+  type t = {
+    id : string;
+    object_ : string;
+    active : bool;
+    code : string;
+    coupon : Coupon.t;
+    created : int;
+    customer : string option;
+    expires_at : int option;
+    livemode : bool;
+    max_redemptions : int option;
+    times_redeemed : int;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      active = json |> member "active" |> to_bool;
+      code = json |> member "code" |> to_string;
+      coupon = json |> member "coupon" |> Coupon.of_json;
+      created = json |> member "created" |> to_int;
+      customer = json |> member "customer" |> to_string_option;
+      expires_at = json |> member "expires_at" |> to_int_option;
+      livemode = json |> member "livemode" |> to_bool;
+      max_redemptions = json |> member "max_redemptions" |> to_int_option;
+      times_redeemed = json |> member "times_redeemed" |> to_int;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** InvoiceItem resource *)
+module Invoice_item = struct
+  type t = {
+    id : string;
+    object_ : string;
+    amount : int;
+    currency : string;
+    customer : string;
+    date : int;
+    description : string option;
+    discountable : bool;
+    invoice : string option;
+    livemode : bool;
+    period_start : int;
+    period_end : int;
+    price : Price.t option;
+    proration : bool;
+    quantity : int;
+    subscription : string option;
+    unit_amount : int option;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    let period = json |> member "period" in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      amount = json |> member "amount" |> to_int;
+      currency = json |> member "currency" |> to_string;
+      customer = json |> member "customer" |> to_string;
+      date = json |> member "date" |> to_int;
+      description = json |> member "description" |> to_string_option;
+      discountable = json |> member "discountable" |> to_bool;
+      invoice = json |> member "invoice" |> to_string_option;
+      livemode = json |> member "livemode" |> to_bool;
+      period_start = period |> member "start" |> to_int;
+      period_end = period |> member "end" |> to_int;
+      price = (match json |> member "price" with
+        | `Null -> None
+        | p -> Some (Price.of_json p));
+      proration = json |> member "proration" |> to_bool;
+      quantity = json |> member "quantity" |> to_int;
+      subscription = json |> member "subscription" |> to_string_option;
+      unit_amount = json |> member "unit_amount" |> to_int_option;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** Quote resource *)
+module Quote = struct
+  type t = {
+    id : string;
+    object_ : string;
+    amount_subtotal : int;
+    amount_total : int;
+    created : int;
+    currency : string option;
+    customer : string option;
+    description : string option;
+    expires_at : int;
+    livemode : bool;
+    status : string;
+    subscription : string option;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      amount_subtotal = json |> member "amount_subtotal" |> to_int;
+      amount_total = json |> member "amount_total" |> to_int;
+      created = json |> member "created" |> to_int;
+      currency = json |> member "currency" |> to_string_option;
+      customer = json |> member "customer" |> to_string_option;
+      description = json |> member "description" |> to_string_option;
+      expires_at = json |> member "expires_at" |> to_int;
+      livemode = json |> member "livemode" |> to_bool;
+      status = json |> member "status" |> to_string;
+      subscription = json |> member "subscription" |> to_string_option;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** CreditNote resource *)
+module Credit_note = struct
+  type t = {
+    id : string;
+    object_ : string;
+    amount : int;
+    created : int;
+    currency : string;
+    customer : string;
+    invoice : string;
+    livemode : bool;
+    memo : string option;
+    number : string;
+    out_of_band_amount : int option;
+    reason : string option;
+    refund : string option;
+    status : string;
+    subtotal : int;
+    total : int;
+    type_ : string;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      amount = json |> member "amount" |> to_int;
+      created = json |> member "created" |> to_int;
+      currency = json |> member "currency" |> to_string;
+      customer = json |> member "customer" |> to_string;
+      invoice = json |> member "invoice" |> to_string;
+      livemode = json |> member "livemode" |> to_bool;
+      memo = json |> member "memo" |> to_string_option;
+      number = json |> member "number" |> to_string;
+      out_of_band_amount = json |> member "out_of_band_amount" |> to_int_option;
+      reason = json |> member "reason" |> to_string_option;
+      refund = json |> member "refund" |> to_string_option;
+      status = json |> member "status" |> to_string;
+      subtotal = json |> member "subtotal" |> to_int;
+      total = json |> member "total" |> to_int;
+      type_ = json |> member "type" |> to_string;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** ApplicationFee resource *)
+module Application_fee = struct
+  type t = {
+    id : string;
+    object_ : string;
+    account : string;
+    amount : int;
+    amount_refunded : int;
+    application : string;
+    charge : string;
+    created : int;
+    currency : string;
+    livemode : bool;
+    refunded : bool;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      account = json |> member "account" |> to_string;
+      amount = json |> member "amount" |> to_int;
+      amount_refunded = json |> member "amount_refunded" |> to_int;
+      application = json |> member "application" |> to_string;
+      charge = json |> member "charge" |> to_string;
+      created = json |> member "created" |> to_int;
+      currency = json |> member "currency" |> to_string;
+      livemode = json |> member "livemode" |> to_bool;
+      refunded = json |> member "refunded" |> to_bool;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** Topup resource *)
+module Topup = struct
+  type t = {
+    id : string;
+    object_ : string;
+    amount : int;
+    created : int;
+    currency : string;
+    description : string option;
+    livemode : bool;
+    source : string option;
+    status : string;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      amount = json |> member "amount" |> to_int;
+      created = json |> member "created" |> to_int;
+      currency = json |> member "currency" |> to_string;
+      description = json |> member "description" |> to_string_option;
+      livemode = json |> member "livemode" |> to_bool;
+      source = json |> member "source" |> to_string_option;
+      status = json |> member "status" |> to_string;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** UsageRecord resource (for metered billing) *)
+module Usage_record = struct
+  type t = {
+    id : string;
+    object_ : string;
+    livemode : bool;
+    quantity : int;
+    subscription_item : string;
+    timestamp : int;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      livemode = json |> member "livemode" |> to_bool;
+      quantity = json |> member "quantity" |> to_int;
+      subscription_item = json |> member "subscription_item" |> to_string;
+      timestamp = json |> member "timestamp" |> to_int;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** SubscriptionItem resource *)
+module Subscription_item = struct
+  type t = {
+    id : string;
+    object_ : string;
+    created : int;
+    price : Price.t;
+    quantity : int option;
+    subscription : string;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      created = json |> member "created" |> to_int;
+      price = json |> member "price" |> Price.of_json;
+      quantity = json |> member "quantity" |> to_int_option;
+      subscription = json |> member "subscription" |> to_string;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** SubscriptionSchedule resource *)
+module Subscription_schedule = struct
+  type t = {
+    id : string;
+    object_ : string;
+    canceled_at : int option;
+    completed_at : int option;
+    created : int;
+    customer : string;
+    end_behavior : string;
+    livemode : bool;
+    status : string;
+    subscription : string option;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      canceled_at = json |> member "canceled_at" |> to_int_option;
+      completed_at = json |> member "completed_at" |> to_int_option;
+      created = json |> member "created" |> to_int;
+      customer = json |> member "customer" |> to_string;
+      end_behavior = json |> member "end_behavior" |> to_string;
+      livemode = json |> member "livemode" |> to_bool;
+      status = json |> member "status" |> to_string;
+      subscription = json |> member "subscription" |> to_string_option;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
 (** List response wrapper *)
 module List_response = struct
   type 'a t = {

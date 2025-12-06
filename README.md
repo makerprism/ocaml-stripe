@@ -180,71 +180,84 @@ The SDK follows a runtime-agnostic design:
 
 #### Core Payments
 
-| Resource | Create | Retrieve | Update | Delete | List | Other |
-|----------|:------:|:--------:|:------:|:------:|:----:|-------|
-| PaymentIntent | ✅ | ✅ | ✅ | - | ✅ | confirm, capture, cancel |
-| PaymentMethod | - | ✅ | - | - | ✅ | attach, detach |
-| SetupIntent | ✅ | ✅ | - | - | ✅ | confirm, cancel |
-| Charge | - | ✅ | - | - | ✅ | capture |
-| Refund | ✅ | ✅ | - | - | ✅ | |
+| Resource | Type | Client | Other |
+|----------|:----:|:------:|-------|
+| PaymentIntent | ✅ | ✅ | confirm, capture, cancel |
+| PaymentMethod | ✅ | ✅ | attach, detach |
+| SetupIntent | ✅ | ✅ | confirm, cancel |
+| Charge | ✅ | ✅ | capture |
+| Refund | ✅ | ✅ | |
 
 #### Checkout & Payment Links
 
-| Resource | Create | Retrieve | Update | Delete | List | Other |
-|----------|:------:|:--------:|:------:|:------:|:----:|-------|
-| Checkout Session | ✅ | ✅ | - | - | ✅ | expire |
-| Payment Link | ✅ | ✅ | ✅ | - | ✅ | |
+| Resource | Type | Client | Other |
+|----------|:----:|:------:|-------|
+| Checkout Session | ✅ | ✅ | expire |
+| Payment Link | ✅ | ✅ | |
 
 #### Billing
 
-| Resource | Create | Retrieve | Update | Delete | List | Other |
-|----------|:------:|:--------:|:------:|:------:|:----:|-------|
-| Customer | ✅ | ✅ | ✅ | ✅ | ✅ | |
-| Subscription | ✅ | ✅ | ✅ | ✅ | ✅ | |
-| Invoice | - | ✅ | - | - | ✅ | pay, void |
-| Price | ✅ | ✅ | - | - | ✅ | |
-| Product | ✅ | ✅ | ✅ | ✅ | ✅ | |
-| Coupon | ✅ | ✅ | ✅ | ✅ | ✅ | |
-| TaxRate | ✅ | ✅ | ✅ | - | ✅ | |
+| Resource | Type | Client | Other |
+|----------|:----:|:------:|-------|
+| Customer | ✅ | ✅ | |
+| Subscription | ✅ | ✅ | |
+| SubscriptionItem | ✅ | - | |
+| SubscriptionSchedule | ✅ | - | |
+| Invoice | ✅ | ✅ | pay, void |
+| InvoiceItem | ✅ | - | |
+| Quote | ✅ | - | |
+| CreditNote | ✅ | - | |
+| Price | ✅ | ✅ | |
+| Product | ✅ | ✅ | |
+| Coupon | ✅ | ✅ | |
+| PromotionCode | ✅ | - | |
+| TaxRate | ✅ | ✅ | |
+| UsageRecord | ✅ | - | |
 
 #### Connect & Payouts
 
-| Resource | Create | Retrieve | Update | Delete | List | Other |
-|----------|:------:|:--------:|:------:|:------:|:----:|-------|
-| Account | ✅ | ✅ | ✅ | ✅ | ✅ | retrieve_current |
-| Transfer | ✅ | ✅ | ✅ | - | ✅ | |
-| Payout | ✅ | ✅ | - | - | ✅ | cancel |
-| BalanceTransaction | - | ✅ | - | - | ✅ | |
-| Balance | - | ✅ | - | - | - | |
+| Resource | Type | Client | Other |
+|----------|:----:|:------:|-------|
+| Account | ✅ | ✅ | retrieve_current |
+| Transfer | ✅ | ✅ | |
+| Payout | ✅ | ✅ | cancel |
+| Topup | ✅ | - | |
+| ApplicationFee | ✅ | - | |
+| BalanceTransaction | ✅ | ✅ | |
+| Balance | ✅ | ✅ | |
 
 #### Fraud & Disputes
 
-| Resource | Create | Retrieve | Update | Delete | List | Other |
-|----------|:------:|:--------:|:------:|:------:|:----:|-------|
-| Dispute | - | ✅ | ✅ | - | ✅ | close |
-| Review | - | ✅ | - | - | ✅ | approve |
+| Resource | Type | Client | Other |
+|----------|:----:|:------:|-------|
+| Dispute | ✅ | ✅ | close |
+| Review | ✅ | ✅ | approve |
 
 #### Files
 
-| Resource | Create | Retrieve | Update | Delete | List | Other |
-|----------|:------:|:--------:|:------:|:------:|:----:|-------|
-| File | - | ✅ | - | - | ✅ | |
-| FileLink | ✅ | ✅ | ✅ | - | ✅ | |
+| Resource | Type | Client | Other |
+|----------|:----:|:------:|-------|
+| File | ✅ | ✅ | |
+| FileLink | ✅ | ✅ | |
 
 #### Other
 
-| Resource | Create | Retrieve | Update | Delete | List | Other |
-|----------|:------:|:--------:|:------:|:------:|:----:|-------|
-| Mandate | - | ✅ | - | - | - | |
+| Resource | Type | Client | Other |
+|----------|:----:|:------:|-------|
+| Mandate | ✅ | ✅ | |
+| Discount | ✅ | - | |
 
 #### Events & Webhooks
 
-| Resource | Create | Retrieve | Update | Delete | List | Other |
-|----------|:------:|:--------:|:------:|:------:|:----:|-------|
-| Event | - | ✅ | - | - | ✅ | |
-| Webhook | - | - | - | - | - | verify_signature |
+| Resource | Type | Client | Other |
+|----------|:----:|:------:|-------|
+| Event | ✅ | ✅ | |
+| Webhook | - | - | verify_signature |
 
-✅ = Implemented, - = Not applicable or not yet implemented
+✅ = Implemented, - = Not yet implemented
+
+**Type** = Resource type defined in `stripe` package  
+**Client** = API client operations in `stripe-lwt` package
 
 ### Features
 

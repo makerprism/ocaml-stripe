@@ -667,6 +667,227 @@ let test_review_parsing () =
   check bool "open" true review.open_;
   check string "reason" "rule" review.reason
 
+let test_promotion_code_parsing () =
+  let open Stripe.Promotion_code in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "promo_123",
+      "object": "promotion_code",
+      "active": true,
+      "code": "SUMMER20",
+      "coupon": {
+        "id": "coupon_123",
+        "object": "coupon",
+        "amount_off": null,
+        "created": 1234567890,
+        "currency": null,
+        "duration": "once",
+        "duration_in_months": null,
+        "livemode": false,
+        "max_redemptions": null,
+        "name": "Summer Sale",
+        "percent_off": 20.0,
+        "times_redeemed": 5,
+        "valid": true
+      },
+      "created": 1234567890,
+      "customer": null,
+      "expires_at": null,
+      "livemode": false,
+      "max_redemptions": 100,
+      "times_redeemed": 10
+    }
+  |} in
+  let promo = of_json json in
+  check string "id" "promo_123" promo.id;
+  check string "object" "promotion_code" promo.object_;
+  check bool "active" true promo.active;
+  check string "code" "SUMMER20" promo.code;
+  check int "times_redeemed" 10 promo.times_redeemed
+
+let test_invoice_item_parsing () =
+  let open Stripe.Invoice_item in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "ii_123",
+      "object": "invoiceitem",
+      "amount": 1000,
+      "currency": "usd",
+      "customer": "cus_123",
+      "date": 1234567890,
+      "description": "Test item",
+      "discountable": true,
+      "invoice": "in_123",
+      "livemode": false,
+      "period": {
+        "start": 1234567890,
+        "end": 1237246290
+      },
+      "price": null,
+      "proration": false,
+      "quantity": 1,
+      "subscription": null,
+      "unit_amount": 1000
+    }
+  |} in
+  let item = of_json json in
+  check string "id" "ii_123" item.id;
+  check string "object" "invoiceitem" item.object_;
+  check int "amount" 1000 item.amount;
+  check string "customer" "cus_123" item.customer;
+  check bool "discountable" true item.discountable
+
+let test_quote_parsing () =
+  let open Stripe.Quote in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "qt_123",
+      "object": "quote",
+      "amount_subtotal": 1000,
+      "amount_total": 1100,
+      "created": 1234567890,
+      "currency": "usd",
+      "customer": "cus_123",
+      "description": "Project quote",
+      "expires_at": 1237246290,
+      "livemode": false,
+      "status": "draft",
+      "subscription": null
+    }
+  |} in
+  let quote = of_json json in
+  check string "id" "qt_123" quote.id;
+  check string "object" "quote" quote.object_;
+  check int "amount_total" 1100 quote.amount_total;
+  check string "status" "draft" quote.status
+
+let test_credit_note_parsing () =
+  let open Stripe.Credit_note in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "cn_123",
+      "object": "credit_note",
+      "amount": 500,
+      "created": 1234567890,
+      "currency": "usd",
+      "customer": "cus_123",
+      "invoice": "in_123",
+      "livemode": false,
+      "memo": "Refund for defective item",
+      "number": "CN-0001",
+      "out_of_band_amount": null,
+      "reason": "product_unsatisfactory",
+      "refund": "re_123",
+      "status": "issued",
+      "subtotal": 500,
+      "total": 500,
+      "type": "pre_payment"
+    }
+  |} in
+  let cn = of_json json in
+  check string "id" "cn_123" cn.id;
+  check string "object" "credit_note" cn.object_;
+  check int "amount" 500 cn.amount;
+  check string "status" "issued" cn.status;
+  check string "number" "CN-0001" cn.number
+
+let test_application_fee_parsing () =
+  let open Stripe.Application_fee in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "fee_123",
+      "object": "application_fee",
+      "account": "acct_123",
+      "amount": 100,
+      "amount_refunded": 0,
+      "application": "ca_123",
+      "charge": "ch_123",
+      "created": 1234567890,
+      "currency": "usd",
+      "livemode": false,
+      "refunded": false
+    }
+  |} in
+  let fee = of_json json in
+  check string "id" "fee_123" fee.id;
+  check string "object" "application_fee" fee.object_;
+  check int "amount" 100 fee.amount;
+  check string "account" "acct_123" fee.account
+
+let test_topup_parsing () =
+  let open Stripe.Topup in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "tu_123",
+      "object": "topup",
+      "amount": 10000,
+      "created": 1234567890,
+      "currency": "usd",
+      "description": "Top up balance",
+      "livemode": false,
+      "source": "src_123",
+      "status": "succeeded"
+    }
+  |} in
+  let topup = of_json json in
+  check string "id" "tu_123" topup.id;
+  check string "object" "topup" topup.object_;
+  check int "amount" 10000 topup.amount;
+  check string "status" "succeeded" topup.status
+
+let test_subscription_item_parsing () =
+  let open Stripe.Subscription_item in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "si_123",
+      "object": "subscription_item",
+      "created": 1234567890,
+      "price": {
+        "id": "price_123",
+        "object": "price",
+        "active": true,
+        "billing_scheme": "per_unit",
+        "created": 1234567890,
+        "currency": "usd",
+        "livemode": false,
+        "product": "prod_123",
+        "recurring": null,
+        "type": "recurring",
+        "unit_amount": 2000
+      },
+      "quantity": 2,
+      "subscription": "sub_123"
+    }
+  |} in
+  let si = of_json json in
+  check string "id" "si_123" si.id;
+  check string "object" "subscription_item" si.object_;
+  check string "subscription" "sub_123" si.subscription;
+  check (option int) "quantity" (Some 2) si.quantity
+
+let test_subscription_schedule_parsing () =
+  let open Stripe.Subscription_schedule in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "sub_sched_123",
+      "object": "subscription_schedule",
+      "canceled_at": null,
+      "completed_at": null,
+      "created": 1234567890,
+      "customer": "cus_123",
+      "end_behavior": "release",
+      "livemode": false,
+      "status": "active",
+      "subscription": "sub_123"
+    }
+  |} in
+  let ss = of_json json in
+  check string "id" "sub_sched_123" ss.id;
+  check string "object" "subscription_schedule" ss.object_;
+  check string "customer" "cus_123" ss.customer;
+  check string "status" "active" ss.status;
+  check string "end_behavior" "release" ss.end_behavior
+
 let () =
   run "Stripe" [
     "Customer", [
@@ -746,5 +967,29 @@ let () =
     ];
     "Review", [
       test_case "parsing" `Quick test_review_parsing;
+    ];
+    "PromotionCode", [
+      test_case "parsing" `Quick test_promotion_code_parsing;
+    ];
+    "InvoiceItem", [
+      test_case "parsing" `Quick test_invoice_item_parsing;
+    ];
+    "Quote", [
+      test_case "parsing" `Quick test_quote_parsing;
+    ];
+    "CreditNote", [
+      test_case "parsing" `Quick test_credit_note_parsing;
+    ];
+    "ApplicationFee", [
+      test_case "parsing" `Quick test_application_fee_parsing;
+    ];
+    "Topup", [
+      test_case "parsing" `Quick test_topup_parsing;
+    ];
+    "SubscriptionItem", [
+      test_case "parsing" `Quick test_subscription_item_parsing;
+    ];
+    "SubscriptionSchedule", [
+      test_case "parsing" `Quick test_subscription_schedule_parsing;
     ];
   ]
