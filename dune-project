@@ -19,8 +19,6 @@
   (dune (>= 3.0))
   yojson
   uri
-  ptime
-  base64
   digestif
   (alcotest :with-test)))
 
@@ -48,6 +46,4 @@
   (stripe-core (= :version))
   yojson
   uri
-  ptime
-  base64
   (alcotest :with-test)))

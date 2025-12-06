@@ -15,8 +15,6 @@ depends: [
   "stripe-core" {= version}
   "yojson"
   "uri"
-  "ptime"
-  "base64"
   "alcotest" {with-test}
   "odoc" {with-doc}
 ]

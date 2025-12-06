@@ -1,5 +1,6 @@
 # ocaml-stripe
 
+[![CI](https://github.com/makerprism/ocaml-stripe/actions/workflows/ci.yml/badge.svg)](https://github.com/makerprism/ocaml-stripe/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![OCaml](https://img.shields.io/badge/OCaml-%3E%3D4.14-orange)](https://ocaml.org/)
 

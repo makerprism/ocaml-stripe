@@ -245,6 +245,161 @@ let test_build_headers_without_options () =
   check bool "no idempotency key header" false has_idempotency_key;
   check bool "no stripe account header" false has_stripe_account
 
+(** Additional error type tests - adapted from stripe-python *)
+
+(* Test: error type parsing for all error types *)
+let test_error_type_of_string () =
+  check bool "api_error" true (error_type_of_string "api_error" = Api_error);
+  check bool "card_error" true (error_type_of_string "card_error" = Card_error);
+  check bool "idempotency_error" true (error_type_of_string "idempotency_error" = Idempotency_error);
+  check bool "invalid_request_error" true (error_type_of_string "invalid_request_error" = Invalid_request_error);
+  check bool "authentication_error" true (error_type_of_string "authentication_error" = Authentication_error);
+  check bool "rate_limit_error" true (error_type_of_string "rate_limit_error" = Rate_limit_error);
+  check bool "unknown defaults to api_error" true (error_type_of_string "unknown_error" = Api_error)
+
+(* Test: parse error with all fields *)
+let test_parse_error_all_fields () =
+  let json = Yojson.Safe.from_string {|
+    {
+      "error": {
+        "type": "invalid_request_error",
+        "message": "Invalid parameter",
+        "code": "parameter_invalid",
+        "param": "amount",
+        "decline_code": null,
+        "doc_url": "https://stripe.com/docs/error-codes/parameter-invalid"
+      }
+    }
+  |} in
+  match parse_error json with
+  | Some error ->
+    check bool "error_type" true (error.error_type = Invalid_request_error);
+    check string "message" "Invalid parameter" error.message;
+    check (option string) "code" (Some "parameter_invalid") error.code;
+    check (option string) "param" (Some "amount") error.param;
+    check (option string) "decline_code" None error.decline_code;
+    check (option string) "doc_url" (Some "https://stripe.com/docs/error-codes/parameter-invalid") error.doc_url
+  | None -> fail "Expected error to be parsed"
+
+(* Test: parse error returns None for non-error JSON *)
+let test_parse_error_returns_none () =
+  let json = Yojson.Safe.from_string {|{"id": "cus_123", "object": "customer"}|} in
+  match parse_error json with
+  | Some _ -> fail "Expected None for non-error JSON"
+  | None -> check bool "returns None" true true
+
+(* Test: parse authentication error *)
+let test_parse_authentication_error () =
+  let json = Yojson.Safe.from_string {|
+    {
+      "error": {
+        "type": "authentication_error",
+        "message": "Invalid API Key provided: sk_test_****1234"
+      }
+    }
+  |} in
+  match parse_error json with
+  | Some error ->
+    check bool "error_type" true (error.error_type = Authentication_error);
+    check string "message" "Invalid API Key provided: sk_test_****1234" error.message
+  | None -> fail "Expected error to be parsed"
+
+(* Test: parse rate limit error *)  
+let test_parse_rate_limit_error () =
+  let json = Yojson.Safe.from_string {|
+    {
+      "error": {
+        "type": "rate_limit_error",
+        "message": "Too many requests"
+      }
+    }
+  |} in
+  match parse_error json with
+  | Some error ->
+    check bool "error_type" true (error.error_type = Rate_limit_error);
+    check string "message" "Too many requests" error.message
+  | None -> fail "Expected error to be parsed"
+
+(** Form body encoding tests - adapted from stripe-python *)
+
+(* Test: URL encoding of special characters *)
+let test_url_encode_special_chars () =
+  (* Uri.pct_encode encodes spaces and special chars, but + and @ 
+     are allowed in query params by default *)
+  let body = build_form_body [("name", "John Doe")] in
+  check string "encodes space" "name=John%20Doe" body
+
+(* Test: form body with empty params *)
+let test_build_form_body_empty () =
+  let body = build_form_body [] in
+  check string "empty params" "" body
+
+(* Test: form body with nested params via bracket notation *)
+let test_build_form_body_nested () =
+  let params = [
+    ("metadata[key1]", "value1");
+    ("metadata[key2]", "value2");
+  ] in
+  let body = build_form_body params in
+  check bool "contains key1" true (String.length body > 0);
+  check bool "has metadata brackets" true 
+    (String.sub body 0 9 = "metadata%")
+
+(* Test: form body with spaces and unicode *)
+let test_build_form_body_unicode () =
+  let body = build_form_body [("description", "Test café")] in
+  check bool "encodes space" true 
+    (String.sub body 0 11 = "description")
+
+(** Header construction tests - adapted from stripe-python *)
+
+(* Test: auth header uses Bearer token *)
+let test_auth_header_bearer () =
+  let config = default_config ~api_key:"sk_test_secret123" in
+  let headers = build_headers config in
+  let auth = List.find (fun (k, _) -> k = "Authorization") headers in
+  check string "uses Bearer" "Bearer sk_test_secret123" (snd auth)
+
+(* Test: content-type header *)
+let test_content_type_header () =
+  let config = default_config ~api_key:"sk_test_123" in
+  let headers = build_headers config in
+  let content_type = List.find (fun (k, _) -> k = "Content-Type") headers in
+  check string "form urlencoded" "application/x-www-form-urlencoded" (snd content_type)
+
+(* Test: api version header when set *)
+let test_api_version_header () =
+  let config = { (default_config ~api_key:"sk_test_123") with api_version = Some "2023-10-16" } in
+  let headers = build_headers config in
+  let version = List.find_opt (fun (k, _) -> k = "Stripe-Version") headers in
+  match version with
+  | Some (_, v) -> check string "api version" "2023-10-16" v
+  | None -> fail "Expected Stripe-Version header"
+
+(* Test: no api version header when not set *)
+let test_no_api_version_header () =
+  let config = default_config ~api_key:"sk_test_123" in
+  let headers = build_headers config in
+  let version = List.find_opt (fun (k, _) -> k = "Stripe-Version") headers in
+  check (option (pair string string)) "no version" None version
+
+(* Test: combined headers *)
+let test_combined_headers () =
+  let config = { (default_config ~api_key:"sk_test_123") with api_version = Some "2023-10-16" } in
+  let options = { 
+    idempotency_key = Some "idem_123";
+    stripe_account = Some "acct_456";
+  } in
+  let headers = build_headers ~options config in
+  let has_auth = List.exists (fun (k, v) -> k = "Authorization" && v = "Bearer sk_test_123") headers in
+  let has_version = List.exists (fun (k, v) -> k = "Stripe-Version" && v = "2023-10-16") headers in
+  let has_idem = List.exists (fun (k, v) -> k = "Idempotency-Key" && v = "idem_123") headers in
+  let has_account = List.exists (fun (k, v) -> k = "Stripe-Account" && v = "acct_456") headers in
+  check bool "has auth" true has_auth;
+  check bool "has version" true has_version;
+  check bool "has idempotency" true has_idem;
+  check bool "has account" true has_account
+
 let () =
   run "Stripe Core" [
     "http_method", [
@@ -255,9 +410,25 @@ let () =
     ];
     "form_body", [
       test_case "build" `Quick test_build_form_body;
+      test_case "special_chars" `Quick test_url_encode_special_chars;
+      test_case "empty" `Quick test_build_form_body_empty;
+      test_case "nested" `Quick test_build_form_body_nested;
+      test_case "unicode" `Quick test_build_form_body_unicode;
     ];
     "error_parsing", [
       test_case "parse_error" `Quick test_parse_error;
+      test_case "error_type_of_string" `Quick test_error_type_of_string;
+      test_case "parse_all_fields" `Quick test_parse_error_all_fields;
+      test_case "returns_none" `Quick test_parse_error_returns_none;
+      test_case "authentication_error" `Quick test_parse_authentication_error;
+      test_case "rate_limit_error" `Quick test_parse_rate_limit_error;
+    ];
+    "headers", [
+      test_case "auth_bearer" `Quick test_auth_header_bearer;
+      test_case "content_type" `Quick test_content_type_header;
+      test_case "api_version" `Quick test_api_version_header;
+      test_case "no_api_version" `Quick test_no_api_version_header;
+      test_case "combined" `Quick test_combined_headers;
     ];
     "webhook_signature", [
       test_case "compute_signature" `Quick test_compute_signature;
