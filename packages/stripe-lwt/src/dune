@@ -1,0 +1,5 @@
+(library
+ (name stripe_lwt)
+ (public_name stripe-lwt)
+ (libraries stripe-core lwt cohttp-lwt-unix)
+ (preprocess (pps lwt_ppx)))

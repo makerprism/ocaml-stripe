@@ -1,0 +1,4 @@
+(test
+ (name test_stripe_lwt)
+ (libraries stripe-lwt alcotest lwt lwt.unix)
+ (preprocess (pps lwt_ppx)))

@@ -1,0 +1,21 @@
+# Dune
+_build/
+*.install
+*.merlin
+.merlin
+
+# Dune package management
+_opam/
+dune.lock/
+
+# Editor
+*~
+*.swp
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Coverage
+_coverage/

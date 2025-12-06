@@ -1,0 +1,4 @@
+(library
+ (name stripe)
+ (public_name stripe)
+ (libraries stripe-core yojson uri ptime base64))
