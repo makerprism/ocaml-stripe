@@ -178,18 +178,55 @@ The SDK follows a runtime-agnostic design:
 
 ### Supported Resources
 
-| Resource | Create | Retrieve | Update | Delete | List |
-|----------|--------|----------|--------|--------|------|
-| Customer | ✅ | ✅ | ✅ | ✅ | ✅ |
-| PaymentIntent | ✅ | ✅ | ✅ | - | ✅ |
-| Charge | - | ✅ | - | - | ✅ |
-| Refund | ✅ | ✅ | - | - | ✅ |
-| Subscription | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Invoice | - | ✅ | - | - | ✅ |
-| Product | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Price | ✅ | ✅ | - | - | ✅ |
-| Balance | - | ✅ | - | - | - |
-| Event | - | ✅ | - | - | ✅ |
+#### Core Payments
+
+| Resource | Create | Retrieve | Update | Delete | List | Other |
+|----------|:------:|:--------:|:------:|:------:|:----:|-------|
+| PaymentIntent | ✅ | ✅ | ✅ | - | ✅ | confirm, capture, cancel |
+| PaymentMethod | - | ✅ | - | - | ✅ | attach, detach |
+| SetupIntent | ✅ | ✅ | - | - | ✅ | confirm, cancel |
+| Charge | - | ✅ | - | - | ✅ | capture |
+| Refund | ✅ | ✅ | - | - | ✅ | |
+
+#### Checkout & Payment Links
+
+| Resource | Create | Retrieve | Update | Delete | List | Other |
+|----------|:------:|:--------:|:------:|:------:|:----:|-------|
+| Checkout Session | ✅ | ✅ | - | - | ✅ | expire |
+| Payment Link | ✅ | ✅ | ✅ | - | ✅ | |
+
+#### Billing
+
+| Resource | Create | Retrieve | Update | Delete | List | Other |
+|----------|:------:|:--------:|:------:|:------:|:----:|-------|
+| Customer | ✅ | ✅ | ✅ | ✅ | ✅ | |
+| Subscription | ✅ | ✅ | ✅ | ✅ | ✅ | |
+| Invoice | - | ✅ | - | - | ✅ | pay, void |
+| Price | ✅ | ✅ | - | - | ✅ | |
+| Product | ✅ | ✅ | ✅ | ✅ | ✅ | |
+| Coupon | ✅ | ✅ | ✅ | ✅ | ✅ | |
+| TaxRate | ✅ | ✅ | ✅ | - | ✅ | |
+
+#### Connect & Payouts
+
+| Resource | Create | Retrieve | Update | Delete | List | Other |
+|----------|:------:|:--------:|:------:|:------:|:----:|-------|
+| Payout | ✅ | ✅ | - | - | ✅ | cancel |
+| BalanceTransaction | - | ✅ | - | - | ✅ | |
+| Balance | - | ✅ | - | - | - | |
+
+#### Fraud & Disputes
+
+| Resource | Create | Retrieve | Update | Delete | List | Other |
+|----------|:------:|:--------:|:------:|:------:|:----:|-------|
+| Dispute | - | ✅ | ✅ | - | ✅ | close |
+
+#### Events & Webhooks
+
+| Resource | Create | Retrieve | Update | Delete | List | Other |
+|----------|:------:|:--------:|:------:|:------:|:----:|-------|
+| Event | - | ✅ | - | - | ✅ | |
+| Webhook | - | - | - | - | - | verify_signature |
 
 ✅ = Implemented, - = Not applicable or not yet implemented
 
@@ -245,7 +282,24 @@ module Client : sig
     (* ... and more *)
   end
   
-  (* Similar modules for: Charge, Refund, Subscription, Invoice, Product, Price, Balance, Event *)
+  (* Additional modules with similar signatures: *)
+  module Charge : sig ... end
+  module Refund : sig ... end
+  module Subscription : sig ... end
+  module Invoice : sig ... end
+  module Product : sig ... end
+  module Price : sig ... end
+  module Balance : sig ... end
+  module Event : sig ... end
+  module Payment_method : sig ... end
+  module Setup_intent : sig ... end
+  module Coupon : sig ... end
+  module Balance_transaction : sig ... end
+  module Payout : sig ... end
+  module Checkout_session : sig ... end
+  module Tax_rate : sig ... end
+  module Payment_link : sig ... end
+  module Dispute : sig ... end
 end
 ```
 

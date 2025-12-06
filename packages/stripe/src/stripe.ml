@@ -801,6 +801,159 @@ module Payout = struct
   let to_json t = t.raw
 end
 
+(** Checkout Session resource *)
+module Checkout_session = struct
+  type line_item = {
+    id : string;
+    object_ : string;
+    amount_total : int;
+    currency : string;
+    description : string option;
+    quantity : int option;
+  }
+
+  type t = {
+    id : string;
+    object_ : string;
+    cancel_url : string option;
+    client_reference_id : string option;
+    currency : string option;
+    customer : string option;
+    customer_email : string option;
+    livemode : bool;
+    mode : string;
+    payment_intent : string option;
+    payment_status : string;
+    status : string option;
+    success_url : string option;
+    url : string option;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      cancel_url = json |> member "cancel_url" |> to_string_option;
+      client_reference_id = json |> member "client_reference_id" |> to_string_option;
+      currency = json |> member "currency" |> to_string_option;
+      customer = json |> member "customer" |> to_string_option;
+      customer_email = json |> member "customer_email" |> to_string_option;
+      livemode = json |> member "livemode" |> to_bool;
+      mode = json |> member "mode" |> to_string;
+      payment_intent = json |> member "payment_intent" |> to_string_option;
+      payment_status = json |> member "payment_status" |> to_string;
+      status = json |> member "status" |> to_string_option;
+      success_url = json |> member "success_url" |> to_string_option;
+      url = json |> member "url" |> to_string_option;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** TaxRate resource *)
+module Tax_rate = struct
+  type t = {
+    id : string;
+    object_ : string;
+    active : bool;
+    country : string option;
+    description : string option;
+    display_name : string;
+    inclusive : bool;
+    jurisdiction : string option;
+    percentage : float;
+    state : string option;
+    tax_type : string option;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      active = json |> member "active" |> to_bool;
+      country = json |> member "country" |> to_string_option;
+      description = json |> member "description" |> to_string_option;
+      display_name = json |> member "display_name" |> to_string;
+      inclusive = json |> member "inclusive" |> to_bool;
+      jurisdiction = json |> member "jurisdiction" |> to_string_option;
+      percentage = json |> member "percentage" |> to_float;
+      state = json |> member "state" |> to_string_option;
+      tax_type = json |> member "tax_type" |> to_string_option;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** PaymentLink resource *)
+module Payment_link = struct
+  type t = {
+    id : string;
+    object_ : string;
+    active : bool;
+    currency : string option;
+    livemode : bool;
+    url : string;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      active = json |> member "active" |> to_bool;
+      currency = json |> member "currency" |> to_string_option;
+      livemode = json |> member "livemode" |> to_bool;
+      url = json |> member "url" |> to_string;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** Dispute resource *)
+module Dispute = struct
+  type t = {
+    id : string;
+    object_ : string;
+    amount : int;
+    charge : string;
+    currency : string;
+    created : int;
+    is_charge_refundable : bool;
+    livemode : bool;
+    payment_intent : string option;
+    reason : string;
+    status : string;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      amount = json |> member "amount" |> to_int;
+      charge = json |> member "charge" |> to_string;
+      currency = json |> member "currency" |> to_string;
+      created = json |> member "created" |> to_int;
+      is_charge_refundable = json |> member "is_charge_refundable" |> to_bool;
+      livemode = json |> member "livemode" |> to_bool;
+      payment_intent = json |> member "payment_intent" |> to_string_option;
+      reason = json |> member "reason" |> to_string;
+      status = json |> member "status" |> to_string;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
 (** List response wrapper *)
 module List_response = struct
   type 'a t = {

@@ -442,6 +442,101 @@ let test_payout_parsing () =
   check string "status" "paid" payout.status;
   check string "type" "bank_account" payout.type_
 
+let test_checkout_session_parsing () =
+  let open Stripe.Checkout_session in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "cs_test_123",
+      "object": "checkout.session",
+      "cancel_url": "https://example.com/cancel",
+      "client_reference_id": null,
+      "currency": "usd",
+      "customer": "cus_123",
+      "customer_email": "test@example.com",
+      "livemode": false,
+      "mode": "payment",
+      "payment_intent": "pi_123",
+      "payment_status": "unpaid",
+      "status": "open",
+      "success_url": "https://example.com/success",
+      "url": "https://checkout.stripe.com/pay/cs_test_123"
+    }
+  |} in
+  let session = of_json json in
+  check string "id" "cs_test_123" session.id;
+  check string "object" "checkout.session" session.object_;
+  check string "mode" "payment" session.mode;
+  check string "payment_status" "unpaid" session.payment_status;
+  check (option string) "customer" (Some "cus_123") session.customer
+
+let test_tax_rate_parsing () =
+  let open Stripe.Tax_rate in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "txr_123",
+      "object": "tax_rate",
+      "active": true,
+      "country": "US",
+      "description": "Sales Tax",
+      "display_name": "Sales Tax",
+      "inclusive": false,
+      "jurisdiction": "California",
+      "percentage": 8.25,
+      "state": "CA",
+      "tax_type": "sales_tax"
+    }
+  |} in
+  let tax_rate = of_json json in
+  check string "id" "txr_123" tax_rate.id;
+  check string "object" "tax_rate" tax_rate.object_;
+  check bool "active" true tax_rate.active;
+  check string "display_name" "Sales Tax" tax_rate.display_name;
+  check bool "inclusive" false tax_rate.inclusive;
+  check (float 0.01) "percentage" 8.25 tax_rate.percentage
+
+let test_payment_link_parsing () =
+  let open Stripe.Payment_link in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "plink_123",
+      "object": "payment_link",
+      "active": true,
+      "currency": "usd",
+      "livemode": false,
+      "url": "https://buy.stripe.com/test_123"
+    }
+  |} in
+  let plink = of_json json in
+  check string "id" "plink_123" plink.id;
+  check string "object" "payment_link" plink.object_;
+  check bool "active" true plink.active;
+  check string "url" "https://buy.stripe.com/test_123" plink.url
+
+let test_dispute_parsing () =
+  let open Stripe.Dispute in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "dp_123",
+      "object": "dispute",
+      "amount": 1000,
+      "charge": "ch_123",
+      "currency": "usd",
+      "created": 1234567890,
+      "is_charge_refundable": false,
+      "livemode": false,
+      "payment_intent": "pi_123",
+      "reason": "fraudulent",
+      "status": "needs_response"
+    }
+  |} in
+  let dispute = of_json json in
+  check string "id" "dp_123" dispute.id;
+  check string "object" "dispute" dispute.object_;
+  check int "amount" 1000 dispute.amount;
+  check string "charge" "ch_123" dispute.charge;
+  check string "reason" "fraudulent" dispute.reason;
+  check string "status" "needs_response" dispute.status
+
 let () =
   run "Stripe" [
     "Customer", [
@@ -491,5 +586,17 @@ let () =
     ];
     "Payout", [
       test_case "parsing" `Quick test_payout_parsing;
+    ];
+    "CheckoutSession", [
+      test_case "parsing" `Quick test_checkout_session_parsing;
+    ];
+    "TaxRate", [
+      test_case "parsing" `Quick test_tax_rate_parsing;
+    ];
+    "PaymentLink", [
+      test_case "parsing" `Quick test_payment_link_parsing;
+    ];
+    "Dispute", [
+      test_case "parsing" `Quick test_dispute_parsing;
     ];
   ]

@@ -663,4 +663,189 @@ module Client = struct
       get ~config ~path:"/v1/payouts" ~params () >>=
       handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
   end
+
+  (** Checkout Session API *)
+  module Checkout_session = struct
+    open Stripe.Checkout_session
+
+    let create ~config ~mode ~success_url ~cancel_url 
+        ?idempotency_key ?customer ?customer_email ?client_reference_id
+        ?line_items ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = [
+        ("mode", mode);
+        ("success_url", success_url);
+        ("cancel_url", cancel_url);
+      ] in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("customer", v)) customer;
+        Option.map (fun v -> ("customer_email", v)) customer_email;
+        Option.map (fun v -> ("client_reference_id", v)) client_reference_id;
+      ] in
+      let params = match line_items with
+        | Some items -> params @ List.concat (List.mapi (fun i (price, qty) -> [
+            (Printf.sprintf "line_items[%d][price]" i, price);
+            (Printf.sprintf "line_items[%d][quantity]" i, string_of_int qty);
+          ]) items)
+        | None -> params
+      in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/checkout/sessions" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/checkout/sessions/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let expire ~config ~id () =
+      post ~config ~path:("/v1/checkout/sessions/" ^ id ^ "/expire") () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ?limit ?starting_after ?customer ?payment_intent ?status () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("customer", v)) customer;
+        Option.map (fun v -> ("payment_intent", v)) payment_intent;
+        Option.map (fun v -> ("status", v)) status;
+      ] in
+      get ~config ~path:"/v1/checkout/sessions" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
+
+  (** TaxRate API *)
+  module Tax_rate = struct
+    open Stripe.Tax_rate
+
+    let create ~config ~display_name ~inclusive ~percentage
+        ?idempotency_key ?active ?country ?description ?jurisdiction 
+        ?state ?tax_type ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = [
+        ("display_name", display_name);
+        ("inclusive", string_of_bool inclusive);
+        ("percentage", Printf.sprintf "%.2f" percentage);
+      ] in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("active", string_of_bool v)) active;
+        Option.map (fun v -> ("country", v)) country;
+        Option.map (fun v -> ("description", v)) description;
+        Option.map (fun v -> ("jurisdiction", v)) jurisdiction;
+        Option.map (fun v -> ("state", v)) state;
+        Option.map (fun v -> ("tax_type", v)) tax_type;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/tax_rates" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/tax_rates/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let update ~config ~id ?active ?description ?display_name ?jurisdiction
+        ?state ?tax_type ?metadata () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("active", string_of_bool v)) active;
+        Option.map (fun v -> ("description", v)) description;
+        Option.map (fun v -> ("display_name", v)) display_name;
+        Option.map (fun v -> ("jurisdiction", v)) jurisdiction;
+        Option.map (fun v -> ("state", v)) state;
+        Option.map (fun v -> ("tax_type", v)) tax_type;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~path:("/v1/tax_rates/" ^ id) ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ?limit ?starting_after ?active ?inclusive () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("active", string_of_bool v)) active;
+        Option.map (fun v -> ("inclusive", string_of_bool v)) inclusive;
+      ] in
+      get ~config ~path:"/v1/tax_rates" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
+
+  (** PaymentLink API *)
+  module Payment_link = struct
+    open Stripe.Payment_link
+
+    let create ~config ~line_items ?idempotency_key ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = List.concat (List.mapi (fun i (price, qty) -> [
+        (Printf.sprintf "line_items[%d][price]" i, price);
+        (Printf.sprintf "line_items[%d][quantity]" i, string_of_int qty);
+      ]) line_items) in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/payment_links" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/payment_links/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let update ~config ~id ?active ?metadata () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("active", string_of_bool v)) active;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~path:("/v1/payment_links/" ^ id) ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ?limit ?starting_after ?active () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("active", string_of_bool v)) active;
+      ] in
+      get ~config ~path:"/v1/payment_links" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
+
+  (** Dispute API *)
+  module Dispute = struct
+    open Stripe.Dispute
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/disputes/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let update ~config ~id ?metadata () =
+      let params = match metadata with
+        | Some m -> List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> []
+      in
+      post ~config ~path:("/v1/disputes/" ^ id) ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let close ~config ~id () =
+      post ~config ~path:("/v1/disputes/" ^ id ^ "/close") () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ?limit ?starting_after ?charge ?payment_intent () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("charge", v)) charge;
+        Option.map (fun v -> ("payment_intent", v)) payment_intent;
+      ] in
+      get ~config ~path:"/v1/disputes" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
 end
