@@ -30,6 +30,7 @@
   (ocaml (>= 4.14))
   (dune (>= 3.0))
   (stripe-core (= :version))
+  (stripe (= :version))
   lwt
   (lwt_ppx (>= 2.0.0))
   cohttp-lwt-unix
