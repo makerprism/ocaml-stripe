@@ -954,6 +954,217 @@ module Dispute = struct
   let to_json t = t.raw
 end
 
+(** Account resource (Connect) *)
+module Account = struct
+  type business_profile = {
+    mcc : string option;
+    name : string option;
+    url : string option;
+  }
+
+  type t = {
+    id : string;
+    object_ : string;
+    business_type : string option;
+    charges_enabled : bool;
+    country : string;
+    created : int;
+    default_currency : string option;
+    details_submitted : bool;
+    email : string option;
+    payouts_enabled : bool;
+    type_ : string option;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      business_type = json |> member "business_type" |> to_string_option;
+      charges_enabled = json |> member "charges_enabled" |> to_bool;
+      country = json |> member "country" |> to_string;
+      created = json |> member "created" |> to_int;
+      default_currency = json |> member "default_currency" |> to_string_option;
+      details_submitted = json |> member "details_submitted" |> to_bool;
+      email = json |> member "email" |> to_string_option;
+      payouts_enabled = json |> member "payouts_enabled" |> to_bool;
+      type_ = json |> member "type" |> to_string_option;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** Transfer resource (Connect) *)
+module Transfer = struct
+  type t = {
+    id : string;
+    object_ : string;
+    amount : int;
+    amount_reversed : int;
+    created : int;
+    currency : string;
+    description : string option;
+    destination : string;
+    livemode : bool;
+    reversed : bool;
+    source_transaction : string option;
+    source_type : string;
+    transfer_group : string option;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      amount = json |> member "amount" |> to_int;
+      amount_reversed = json |> member "amount_reversed" |> to_int;
+      created = json |> member "created" |> to_int;
+      currency = json |> member "currency" |> to_string;
+      description = json |> member "description" |> to_string_option;
+      destination = json |> member "destination" |> to_string;
+      livemode = json |> member "livemode" |> to_bool;
+      reversed = json |> member "reversed" |> to_bool;
+      source_transaction = json |> member "source_transaction" |> to_string_option;
+      source_type = json |> member "source_type" |> to_string;
+      transfer_group = json |> member "transfer_group" |> to_string_option;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** File resource *)
+module File = struct
+  type t = {
+    id : string;
+    object_ : string;
+    created : int;
+    expires_at : int option;
+    filename : string option;
+    purpose : string;
+    size : int;
+    type_ : string option;
+    url : string option;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      created = json |> member "created" |> to_int;
+      expires_at = json |> member "expires_at" |> to_int_option;
+      filename = json |> member "filename" |> to_string_option;
+      purpose = json |> member "purpose" |> to_string;
+      size = json |> member "size" |> to_int;
+      type_ = json |> member "type" |> to_string_option;
+      url = json |> member "url" |> to_string_option;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** FileLink resource *)
+module File_link = struct
+  type t = {
+    id : string;
+    object_ : string;
+    created : int;
+    expired : bool;
+    expires_at : int option;
+    file : string;
+    livemode : bool;
+    url : string option;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      created = json |> member "created" |> to_int;
+      expired = json |> member "expired" |> to_bool;
+      expires_at = json |> member "expires_at" |> to_int_option;
+      file = json |> member "file" |> to_string;
+      livemode = json |> member "livemode" |> to_bool;
+      url = json |> member "url" |> to_string_option;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** Mandate resource *)
+module Mandate = struct
+  type customer_acceptance = {
+    accepted_at : int option;
+    type_ : string;
+  }
+
+  type t = {
+    id : string;
+    object_ : string;
+    livemode : bool;
+    payment_method : string;
+    status : string;
+    type_ : string;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      livemode = json |> member "livemode" |> to_bool;
+      payment_method = json |> member "payment_method" |> to_string;
+      status = json |> member "status" |> to_string;
+      type_ = json |> member "type" |> to_string;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
+(** Review resource (Radar) *)
+module Review = struct
+  type t = {
+    id : string;
+    object_ : string;
+    charge : string option;
+    created : int;
+    livemode : bool;
+    open_ : bool;
+    payment_intent : string option;
+    reason : string;
+    raw : Yojson.Safe.t;
+  }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      charge = json |> member "charge" |> to_string_option;
+      created = json |> member "created" |> to_int;
+      livemode = json |> member "livemode" |> to_bool;
+      open_ = json |> member "open" |> to_bool;
+      payment_intent = json |> member "payment_intent" |> to_string_option;
+      reason = json |> member "reason" |> to_string;
+      raw = json;
+    }
+
+  let to_json t = t.raw
+end
+
 (** List response wrapper *)
 module List_response = struct
   type 'a t = {

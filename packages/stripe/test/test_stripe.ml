@@ -537,6 +537,136 @@ let test_dispute_parsing () =
   check string "reason" "fraudulent" dispute.reason;
   check string "status" "needs_response" dispute.status
 
+let test_account_parsing () =
+  let open Stripe.Account in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "acct_123",
+      "object": "account",
+      "business_type": "company",
+      "charges_enabled": true,
+      "country": "US",
+      "created": 1234567890,
+      "default_currency": "usd",
+      "details_submitted": true,
+      "email": "test@example.com",
+      "payouts_enabled": true,
+      "type": "standard"
+    }
+  |} in
+  let account = of_json json in
+  check string "id" "acct_123" account.id;
+  check string "object" "account" account.object_;
+  check bool "charges_enabled" true account.charges_enabled;
+  check string "country" "US" account.country;
+  check bool "payouts_enabled" true account.payouts_enabled
+
+let test_transfer_parsing () =
+  let open Stripe.Transfer in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "tr_123",
+      "object": "transfer",
+      "amount": 1000,
+      "amount_reversed": 0,
+      "created": 1234567890,
+      "currency": "usd",
+      "description": "Test transfer",
+      "destination": "acct_456",
+      "livemode": false,
+      "reversed": false,
+      "source_transaction": "ch_123",
+      "source_type": "card",
+      "transfer_group": "ORDER_123"
+    }
+  |} in
+  let transfer = of_json json in
+  check string "id" "tr_123" transfer.id;
+  check string "object" "transfer" transfer.object_;
+  check int "amount" 1000 transfer.amount;
+  check string "destination" "acct_456" transfer.destination;
+  check string "source_type" "card" transfer.source_type
+
+let test_file_parsing () =
+  let open Stripe.File in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "file_123",
+      "object": "file",
+      "created": 1234567890,
+      "expires_at": 1234657890,
+      "filename": "document.pdf",
+      "purpose": "dispute_evidence",
+      "size": 12345,
+      "type": "pdf",
+      "url": "https://files.stripe.com/v1/files/file_123/contents"
+    }
+  |} in
+  let file = of_json json in
+  check string "id" "file_123" file.id;
+  check string "object" "file" file.object_;
+  check string "purpose" "dispute_evidence" file.purpose;
+  check int "size" 12345 file.size
+
+let test_file_link_parsing () =
+  let open Stripe.File_link in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "link_123",
+      "object": "file_link",
+      "created": 1234567890,
+      "expired": false,
+      "expires_at": 1234657890,
+      "file": "file_123",
+      "livemode": false,
+      "url": "https://files.stripe.com/links/link_123"
+    }
+  |} in
+  let link = of_json json in
+  check string "id" "link_123" link.id;
+  check string "object" "file_link" link.object_;
+  check bool "expired" false link.expired;
+  check string "file" "file_123" link.file
+
+let test_mandate_parsing () =
+  let open Stripe.Mandate in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "mandate_123",
+      "object": "mandate",
+      "livemode": false,
+      "payment_method": "pm_123",
+      "status": "active",
+      "type": "multi_use"
+    }
+  |} in
+  let mandate = of_json json in
+  check string "id" "mandate_123" mandate.id;
+  check string "object" "mandate" mandate.object_;
+  check string "payment_method" "pm_123" mandate.payment_method;
+  check string "status" "active" mandate.status;
+  check string "type" "multi_use" mandate.type_
+
+let test_review_parsing () =
+  let open Stripe.Review in
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "prv_123",
+      "object": "review",
+      "charge": "ch_123",
+      "created": 1234567890,
+      "livemode": false,
+      "open": true,
+      "payment_intent": "pi_123",
+      "reason": "rule"
+    }
+  |} in
+  let review = of_json json in
+  check string "id" "prv_123" review.id;
+  check string "object" "review" review.object_;
+  check bool "open" true review.open_;
+  check string "reason" "rule" review.reason
+
 let () =
   run "Stripe" [
     "Customer", [
@@ -598,5 +728,23 @@ let () =
     ];
     "Dispute", [
       test_case "parsing" `Quick test_dispute_parsing;
+    ];
+    "Account", [
+      test_case "parsing" `Quick test_account_parsing;
+    ];
+    "Transfer", [
+      test_case "parsing" `Quick test_transfer_parsing;
+    ];
+    "File", [
+      test_case "parsing" `Quick test_file_parsing;
+    ];
+    "FileLink", [
+      test_case "parsing" `Quick test_file_link_parsing;
+    ];
+    "Mandate", [
+      test_case "parsing" `Quick test_mandate_parsing;
+    ];
+    "Review", [
+      test_case "parsing" `Quick test_review_parsing;
     ];
   ]

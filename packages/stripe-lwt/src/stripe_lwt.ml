@@ -848,4 +848,197 @@ module Client = struct
       get ~config ~path:"/v1/disputes" ~params () >>=
       handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
   end
+
+  (** Account API (Connect) *)
+  module Account = struct
+    open Stripe.Account
+
+    let create ~config ?idempotency_key ?type_ ?country ?email 
+        ?business_type ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("type", v)) type_;
+        Option.map (fun v -> ("country", v)) country;
+        Option.map (fun v -> ("email", v)) email;
+        Option.map (fun v -> ("business_type", v)) business_type;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/accounts" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/accounts/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let retrieve_current ~config () =
+      get ~config ~path:"/v1/account" () >>=
+      handle_response ~parse_ok:of_json
+
+    let update ~config ~id ?email ?business_type ?metadata () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("email", v)) email;
+        Option.map (fun v -> ("business_type", v)) business_type;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~path:("/v1/accounts/" ^ id) ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let delete ~config ~id () =
+      delete ~config ~path:("/v1/accounts/" ^ id) () >>=
+      handle_response ~parse_ok:Stripe.Deleted.of_json
+
+    let list ~config ?limit ?starting_after () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+      ] in
+      get ~config ~path:"/v1/accounts" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
+
+  (** Transfer API (Connect) *)
+  module Transfer = struct
+    open Stripe.Transfer
+
+    let create ~config ~amount ~currency ~destination
+        ?idempotency_key ?description ?source_transaction 
+        ?transfer_group ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = [
+        ("amount", string_of_int amount);
+        ("currency", currency);
+        ("destination", destination);
+      ] in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("description", v)) description;
+        Option.map (fun v -> ("source_transaction", v)) source_transaction;
+        Option.map (fun v -> ("transfer_group", v)) transfer_group;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/transfers" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/transfers/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let update ~config ~id ?description ?metadata () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("description", v)) description;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~path:("/v1/transfers/" ^ id) ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ?limit ?starting_after ?destination ?transfer_group () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("destination", v)) destination;
+        Option.map (fun v -> ("transfer_group", v)) transfer_group;
+      ] in
+      get ~config ~path:"/v1/transfers" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
+
+  (** File API *)
+  module File = struct
+    open Stripe.File
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/files/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ?limit ?starting_after ?purpose () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("purpose", v)) purpose;
+      ] in
+      get ~config ~path:"/v1/files" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
+
+  (** FileLink API *)
+  module File_link = struct
+    open Stripe.File_link
+
+    let create ~config ~file ?idempotency_key ?expires_at ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = [("file", file)] in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("expires_at", string_of_int v)) expires_at;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/file_links" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/file_links/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let update ~config ~id ?expires_at ?metadata () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("expires_at", string_of_int v)) expires_at;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~path:("/v1/file_links/" ^ id) ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ?limit ?starting_after ?file ?expired () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("file", v)) file;
+        Option.map (fun v -> ("expired", string_of_bool v)) expired;
+      ] in
+      get ~config ~path:"/v1/file_links" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
+
+  (** Mandate API *)
+  module Mandate = struct
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/mandates/" ^ id) () >>=
+      handle_response ~parse_ok:Stripe.Mandate.of_json
+  end
+
+  (** Review API (Radar) *)
+  module Review = struct
+    open Stripe.Review
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/reviews/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let approve ~config ~id () =
+      post ~config ~path:("/v1/reviews/" ^ id ^ "/approve") () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ?limit ?starting_after () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+      ] in
+      get ~config ~path:"/v1/reviews" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
 end

@@ -211,6 +211,8 @@ The SDK follows a runtime-agnostic design:
 
 | Resource | Create | Retrieve | Update | Delete | List | Other |
 |----------|:------:|:--------:|:------:|:------:|:----:|-------|
+| Account | ✅ | ✅ | ✅ | ✅ | ✅ | retrieve_current |
+| Transfer | ✅ | ✅ | ✅ | - | ✅ | |
 | Payout | ✅ | ✅ | - | - | ✅ | cancel |
 | BalanceTransaction | - | ✅ | - | - | ✅ | |
 | Balance | - | ✅ | - | - | - | |
@@ -220,6 +222,20 @@ The SDK follows a runtime-agnostic design:
 | Resource | Create | Retrieve | Update | Delete | List | Other |
 |----------|:------:|:--------:|:------:|:------:|:----:|-------|
 | Dispute | - | ✅ | ✅ | - | ✅ | close |
+| Review | - | ✅ | - | - | ✅ | approve |
+
+#### Files
+
+| Resource | Create | Retrieve | Update | Delete | List | Other |
+|----------|:------:|:--------:|:------:|:------:|:----:|-------|
+| File | - | ✅ | - | - | ✅ | |
+| FileLink | ✅ | ✅ | ✅ | - | ✅ | |
+
+#### Other
+
+| Resource | Create | Retrieve | Update | Delete | List | Other |
+|----------|:------:|:--------:|:------:|:------:|:----:|-------|
+| Mandate | - | ✅ | - | - | - | |
 
 #### Events & Webhooks
 
