@@ -13,6 +13,7 @@ OCaml SDK for the Stripe API. Process payments, manage customers, handle subscri
 > - Core types for Stripe resources (Customer, Charge, PaymentIntent, etc.)
 > - Webhook signature verification
 > - Error parsing and handling
+> - Full CRUD operations via Lwt client
 >
 > All functionality should be considered untested against the live Stripe API. Use at your own risk and expect breaking changes.
 
@@ -21,8 +22,8 @@ OCaml SDK for the Stripe API. Process payments, manage customers, handle subscri
 | Package | Description |
 |---------|-------------|
 | `stripe-core` | Core interfaces and types (runtime-agnostic) |
-| `stripe-lwt` | Lwt runtime adapter with Cohttp |
-| `stripe` | Full Stripe API client with resource types |
+| `stripe-lwt` | Lwt runtime adapter with full API client |
+| `stripe` | Stripe resource types and parsing |
 
 ## Installation
 
@@ -55,26 +56,91 @@ dune build
 ### Configuration
 
 ```ocaml
-open Stripe
+open Stripe_lwt
 
-let config = default_config ~api_key:"sk_test_..."
+let config = Client.create ~api_key:"sk_test_..."
 ```
 
-### Parsing API Responses
+### Customer Operations
 
 ```ocaml
-open Stripe
+open Lwt.Syntax
+open Stripe_lwt
 
-(* Parse a customer from JSON response *)
-let customer = Customer.of_json json in
-Printf.printf "Customer: %s (%s)\n" customer.id (Option.value ~default:"" customer.email)
+let () = Lwt_main.run begin
+  let config = Client.create ~api_key:"sk_test_..." in
 
-(* Parse a payment intent *)
-let pi = Payment_intent.of_json json in
-match pi.status with
-| Payment_intent.Succeeded -> print_endline "Payment successful!"
-| Payment_intent.Requires_action -> print_endline "Additional action required"
-| _ -> print_endline "Payment pending"
+  (* Create a customer *)
+  let* result = Client.Customer.create ~config
+    ~email:"customer@example.com"
+    ~name:"Jane Doe"
+    ~description:"New customer"
+    ()
+  in
+  match result with
+  | Ok customer ->
+    Printf.printf "Created customer: %s\n" customer.id;
+    
+    (* Retrieve the customer *)
+    let* result = Client.Customer.retrieve ~config ~id:customer.id () in
+    (match result with
+    | Ok c -> Printf.printf "Retrieved: %s\n" (Option.value ~default:"" c.email)
+    | Error e -> Printf.printf "Error: %s\n" e.message);
+    
+    (* List customers *)
+    let* result = Client.Customer.list ~config ~limit:10 () in
+    (match result with
+    | Ok list -> Printf.printf "Found %d customers\n" (List.length list.data)
+    | Error e -> Printf.printf "Error: %s\n" e.message);
+    
+    Lwt.return_unit
+  | Error e ->
+    Printf.printf "Error: %s\n" e.message;
+    Lwt.return_unit
+end
+```
+
+### Payment Intents
+
+```ocaml
+open Lwt.Syntax
+open Stripe_lwt
+
+let create_payment config ~amount ~currency ~customer =
+  let* result = Client.Payment_intent.create ~config
+    ~amount
+    ~currency
+    ~customer
+    ~capture_method:"automatic"
+    ()
+  in
+  match result with
+  | Ok pi ->
+    Printf.printf "PaymentIntent %s: %s\n" pi.id
+      (match pi.status with
+       | Stripe.Payment_intent.Succeeded -> "succeeded"
+       | Stripe.Payment_intent.Requires_payment_method -> "requires_payment_method"
+       | Stripe.Payment_intent.Requires_confirmation -> "requires_confirmation"
+       | Stripe.Payment_intent.Requires_action -> "requires_action"
+       | Stripe.Payment_intent.Processing -> "processing"
+       | Stripe.Payment_intent.Requires_capture -> "requires_capture"
+       | Stripe.Payment_intent.Canceled -> "canceled");
+    Lwt.return_ok pi
+  | Error e ->
+    Lwt.return_error e
+```
+
+### Subscriptions
+
+```ocaml
+open Lwt.Syntax
+open Stripe_lwt
+
+let create_subscription config ~customer ~price =
+  Client.Subscription.create ~config ~customer ~price ()
+
+let cancel_subscription config ~id =
+  Client.Subscription.cancel ~config ~id ()
 ```
 
 ### Webhook Signature Verification
@@ -102,49 +168,30 @@ let handle_webhook ~payload ~sig_header ~webhook_secret =
     Error (Printf.sprintf "Error: %s" (Printexc.to_string exn))
 ```
 
-### With Lwt Runtime
-
-```ocaml
-open Lwt.Infix
-open Stripe_lwt
-
-let list_customers config =
-  get ~config ~path:"/v1/customers" () >>= fun response ->
-  if response.status_code = 200 then
-    let json = Yojson.Safe.from_string response.body in
-    let customers = Stripe.List_response.of_json Stripe.Customer.of_json json in
-    Lwt.return_ok customers
-  else
-    let json = Yojson.Safe.from_string response.body in
-    match Stripe_core.parse_error json with
-    | Some err -> Lwt.return_error err
-    | None -> Lwt.return_error { error_type = Api_error; message = "Unknown error"; code = None; param = None; decline_code = None; doc_url = None }
-```
-
 ## Architecture
 
 The SDK follows a runtime-agnostic design:
 
 1. **Core** (`stripe-core`): Pure OCaml types, interfaces, error handling, and webhook verification
-2. **Runtime Adapters** (`stripe-lwt`): HTTP client implementations
-3. **API Client** (`stripe`): Stripe resource types and parsing
+2. **Runtime Adapters** (`stripe-lwt`): HTTP client and full API operations
+3. **Resource Types** (`stripe`): Stripe resource types and JSON parsing
 
 ### Supported Resources
 
-| Resource | Parse | Create | Retrieve | Update | Delete | List |
-|----------|-------|--------|----------|--------|--------|------|
-| Customer | ✅ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
-| Charge | ✅ | ⚠️ | ⚠️ | ⚠️ | - | ⚠️ |
-| PaymentIntent | ✅ | ⚠️ | ⚠️ | ⚠️ | - | ⚠️ |
-| Refund | ✅ | ⚠️ | ⚠️ | ⚠️ | - | ⚠️ |
-| Subscription | ✅ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
-| Invoice | ✅ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
-| Product | ✅ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
-| Price | ✅ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
-| Balance | ✅ | - | ⚠️ | - | - | - |
-| Event | ✅ | - | ⚠️ | - | - | ⚠️ |
+| Resource | Create | Retrieve | Update | Delete | List |
+|----------|--------|----------|--------|--------|------|
+| Customer | ✅ | ✅ | ✅ | ✅ | ✅ |
+| PaymentIntent | ✅ | ✅ | ✅ | - | ✅ |
+| Charge | - | ✅ | - | - | ✅ |
+| Refund | ✅ | ✅ | - | - | ✅ |
+| Subscription | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Invoice | - | ✅ | - | - | ✅ |
+| Product | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Price | ✅ | ✅ | - | - | ✅ |
+| Balance | - | ✅ | - | - | - |
+| Event | - | ✅ | - | - | ✅ |
 
-✅ = Implemented and tested, ⚠️ = Planned/In progress, - = Not applicable
+✅ = Implemented, - = Not applicable or not yet implemented
 
 ### Features
 
@@ -152,6 +199,55 @@ The SDK follows a runtime-agnostic design:
 - **Error Handling**: Comprehensive Stripe error type parsing
 - **Type Safety**: Strongly typed resource models with variant types for statuses
 - **Runtime Agnostic**: Core logic works with any async runtime
+- **Idiomatic OCaml**: Uses Result types, optional parameters, and modules
+
+## API Reference
+
+### Client Module
+
+```ocaml
+module Client : sig
+  type t = Stripe_core.config
+  val create : api_key:string -> t
+
+  module Customer : sig
+    val create : config:t -> ?email:string -> ?name:string -> 
+      ?description:string -> ?phone:string -> 
+      ?metadata:(string * string) list -> unit -> 
+      (Stripe.Customer.t, Stripe_core.stripe_error) result Lwt.t
+    val retrieve : config:t -> id:string -> unit -> 
+      (Stripe.Customer.t, Stripe_core.stripe_error) result Lwt.t
+    val update : config:t -> id:string -> ?email:string -> ?name:string -> 
+      ?description:string -> ?phone:string -> 
+      ?metadata:(string * string) list -> unit -> 
+      (Stripe.Customer.t, Stripe_core.stripe_error) result Lwt.t
+    val delete : config:t -> id:string -> unit -> 
+      (Stripe.Deleted.t, Stripe_core.stripe_error) result Lwt.t
+    val list : config:t -> ?limit:int -> ?starting_after:string -> 
+      ?ending_before:string -> ?email:string -> unit -> 
+      (Stripe.Customer.t Stripe.List_response.t, Stripe_core.stripe_error) result Lwt.t
+  end
+
+  module Payment_intent : sig
+    val create : config:t -> amount:int -> currency:string -> 
+      ?customer:string -> ?description:string -> ?payment_method:string -> 
+      ?confirm:bool -> ?capture_method:string -> 
+      ?metadata:(string * string) list -> unit -> 
+      (Stripe.Payment_intent.t, Stripe_core.stripe_error) result Lwt.t
+    val retrieve : config:t -> id:string -> unit -> 
+      (Stripe.Payment_intent.t, Stripe_core.stripe_error) result Lwt.t
+    val confirm : config:t -> id:string -> ?payment_method:string -> unit -> 
+      (Stripe.Payment_intent.t, Stripe_core.stripe_error) result Lwt.t
+    val capture : config:t -> id:string -> ?amount_to_capture:int -> unit -> 
+      (Stripe.Payment_intent.t, Stripe_core.stripe_error) result Lwt.t
+    val cancel : config:t -> id:string -> ?cancellation_reason:string -> unit -> 
+      (Stripe.Payment_intent.t, Stripe_core.stripe_error) result Lwt.t
+    (* ... and more *)
+  end
+  
+  (* Similar modules for: Charge, Refund, Subscription, Invoice, Product, Price, Balance, Event *)
+end
+```
 
 ## Testing
 
