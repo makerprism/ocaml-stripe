@@ -1041,4 +1041,408 @@ module Client = struct
       get ~config ~path:"/v1/reviews" ~params () >>=
       handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
   end
+
+  (** PromotionCode API *)
+  module Promotion_code = struct
+    open Stripe.Promotion_code
+
+    let create ~config ~coupon ?idempotency_key ?code ?customer 
+        ?expires_at ?max_redemptions ?active ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = [("coupon", coupon)] in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("code", v)) code;
+        Option.map (fun v -> ("customer", v)) customer;
+        Option.map (fun v -> ("expires_at", string_of_int v)) expires_at;
+        Option.map (fun v -> ("max_redemptions", string_of_int v)) max_redemptions;
+        Option.map (fun v -> ("active", string_of_bool v)) active;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/promotion_codes" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/promotion_codes/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let update ~config ~id ?active ?metadata () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("active", string_of_bool v)) active;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~path:("/v1/promotion_codes/" ^ id) ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ?limit ?starting_after ?code ?coupon ?customer ?active () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("code", v)) code;
+        Option.map (fun v -> ("coupon", v)) coupon;
+        Option.map (fun v -> ("customer", v)) customer;
+        Option.map (fun v -> ("active", string_of_bool v)) active;
+      ] in
+      get ~config ~path:"/v1/promotion_codes" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
+
+  (** InvoiceItem API *)
+  module Invoice_item = struct
+    open Stripe.Invoice_item
+
+    let create ~config ~customer ?idempotency_key ?amount ?currency 
+        ?description ?invoice ?price ?quantity ?unit_amount ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = [("customer", customer)] in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("amount", string_of_int v)) amount;
+        Option.map (fun v -> ("currency", v)) currency;
+        Option.map (fun v -> ("description", v)) description;
+        Option.map (fun v -> ("invoice", v)) invoice;
+        Option.map (fun v -> ("price", v)) price;
+        Option.map (fun v -> ("quantity", string_of_int v)) quantity;
+        Option.map (fun v -> ("unit_amount", string_of_int v)) unit_amount;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/invoiceitems" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/invoiceitems/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let update ~config ~id ?amount ?description ?quantity ?unit_amount ?metadata () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("amount", string_of_int v)) amount;
+        Option.map (fun v -> ("description", v)) description;
+        Option.map (fun v -> ("quantity", string_of_int v)) quantity;
+        Option.map (fun v -> ("unit_amount", string_of_int v)) unit_amount;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~path:("/v1/invoiceitems/" ^ id) ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let delete ~config ~id () =
+      delete ~config ~path:("/v1/invoiceitems/" ^ id) () >>=
+      handle_response ~parse_ok:Stripe.Deleted.of_json
+
+    let list ~config ?limit ?starting_after ?customer ?invoice () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("customer", v)) customer;
+        Option.map (fun v -> ("invoice", v)) invoice;
+      ] in
+      get ~config ~path:"/v1/invoiceitems" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
+
+  (** Quote API *)
+  module Quote = struct
+    open Stripe.Quote
+
+    let create ~config ?idempotency_key ?customer ?description 
+        ?expires_at ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("customer", v)) customer;
+        Option.map (fun v -> ("description", v)) description;
+        Option.map (fun v -> ("expires_at", string_of_int v)) expires_at;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/quotes" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/quotes/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let update ~config ~id ?description ?expires_at ?metadata () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("description", v)) description;
+        Option.map (fun v -> ("expires_at", string_of_int v)) expires_at;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~path:("/v1/quotes/" ^ id) ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let finalize_quote ~config ~id () =
+      post ~config ~path:("/v1/quotes/" ^ id ^ "/finalize") () >>=
+      handle_response ~parse_ok:of_json
+
+    let accept ~config ~id () =
+      post ~config ~path:("/v1/quotes/" ^ id ^ "/accept") () >>=
+      handle_response ~parse_ok:of_json
+
+    let cancel ~config ~id () =
+      post ~config ~path:("/v1/quotes/" ^ id ^ "/cancel") () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ?limit ?starting_after ?customer ?status () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("customer", v)) customer;
+        Option.map (fun v -> ("status", v)) status;
+      ] in
+      get ~config ~path:"/v1/quotes" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
+
+  (** CreditNote API *)
+  module Credit_note = struct
+    open Stripe.Credit_note
+
+    let create ~config ~invoice ?idempotency_key ?amount ?memo 
+        ?reason ?refund ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = [("invoice", invoice)] in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("amount", string_of_int v)) amount;
+        Option.map (fun v -> ("memo", v)) memo;
+        Option.map (fun v -> ("reason", v)) reason;
+        Option.map (fun v -> ("refund", v)) refund;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/credit_notes" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/credit_notes/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let update ~config ~id ?memo ?metadata () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("memo", v)) memo;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~path:("/v1/credit_notes/" ^ id) ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let void_credit_note ~config ~id () =
+      post ~config ~path:("/v1/credit_notes/" ^ id ^ "/void") () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ?limit ?starting_after ?invoice ?customer () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("invoice", v)) invoice;
+        Option.map (fun v -> ("customer", v)) customer;
+      ] in
+      get ~config ~path:"/v1/credit_notes" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
+
+  (** ApplicationFee API *)
+  module Application_fee = struct
+    open Stripe.Application_fee
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/application_fees/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ?limit ?starting_after ?charge () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("charge", v)) charge;
+      ] in
+      get ~config ~path:"/v1/application_fees" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
+
+  (** Topup API *)
+  module Topup = struct
+    open Stripe.Topup
+
+    let create ~config ~amount ~currency ?idempotency_key 
+        ?description ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = [
+        ("amount", string_of_int amount);
+        ("currency", currency);
+      ] in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("description", v)) description;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/topups" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/topups/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let update ~config ~id ?description ?metadata () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("description", v)) description;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~path:("/v1/topups/" ^ id) ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let cancel ~config ~id () =
+      post ~config ~path:("/v1/topups/" ^ id ^ "/cancel") () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ?limit ?starting_after ?status () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("status", v)) status;
+      ] in
+      get ~config ~path:"/v1/topups" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
+
+  (** SubscriptionItem API *)
+  module Subscription_item = struct
+    open Stripe.Subscription_item
+
+    let create ~config ~subscription ~price ?idempotency_key 
+        ?quantity ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = [
+        ("subscription", subscription);
+        ("price", price);
+      ] in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("quantity", string_of_int v)) quantity;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/subscription_items" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/subscription_items/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let update ~config ~id ?price ?quantity ?metadata () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("price", v)) price;
+        Option.map (fun v -> ("quantity", string_of_int v)) quantity;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~path:("/v1/subscription_items/" ^ id) ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let delete ~config ~id () =
+      delete ~config ~path:("/v1/subscription_items/" ^ id) () >>=
+      handle_response ~parse_ok:Stripe.Deleted.of_json
+
+    let list ~config ~subscription ?limit ?starting_after () =
+      let params = [("subscription", subscription)] in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+      ] in
+      get ~config ~path:"/v1/subscription_items" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+
+    (** Create a usage record for metered billing *)
+    let create_usage_record ~config ~id ~quantity ~timestamp 
+        ?idempotency_key ?action () =
+      let options = { default_request_options with idempotency_key } in
+      let params = [
+        ("quantity", string_of_int quantity);
+        ("timestamp", string_of_int timestamp);
+      ] in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("action", v)) action;
+      ] in
+      post ~config ~options 
+        ~path:("/v1/subscription_items/" ^ id ^ "/usage_records") 
+        ~params () >>=
+      handle_response ~parse_ok:Stripe.Usage_record.of_json
+  end
+
+  (** SubscriptionSchedule API *)
+  module Subscription_schedule = struct
+    open Stripe.Subscription_schedule
+
+    let create ~config ?idempotency_key ?customer ?from_subscription 
+        ?end_behavior ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("customer", v)) customer;
+        Option.map (fun v -> ("from_subscription", v)) from_subscription;
+        Option.map (fun v -> ("end_behavior", v)) end_behavior;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/subscription_schedules" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/subscription_schedules/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let update ~config ~id ?end_behavior ?metadata () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("end_behavior", v)) end_behavior;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~path:("/v1/subscription_schedules/" ^ id) ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let cancel ~config ~id () =
+      post ~config ~path:("/v1/subscription_schedules/" ^ id ^ "/cancel") () >>=
+      handle_response ~parse_ok:of_json
+
+    let release ~config ~id () =
+      post ~config ~path:("/v1/subscription_schedules/" ^ id ^ "/release") () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ?limit ?starting_after ?customer ?scheduled () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("customer", v)) customer;
+        Option.map (fun v -> ("scheduled", string_of_bool v)) scheduled;
+      ] in
+      get ~config ~path:"/v1/subscription_schedules" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
 end

@@ -201,18 +201,18 @@ The SDK follows a runtime-agnostic design:
 |----------|:----:|:------:|-------|
 | Customer | ✅ | ✅ | |
 | Subscription | ✅ | ✅ | |
-| SubscriptionItem | ✅ | - | |
-| SubscriptionSchedule | ✅ | - | |
+| SubscriptionItem | ✅ | ✅ | create_usage_record |
+| SubscriptionSchedule | ✅ | ✅ | cancel, release |
 | Invoice | ✅ | ✅ | pay, void |
-| InvoiceItem | ✅ | - | |
-| Quote | ✅ | - | |
-| CreditNote | ✅ | - | |
+| InvoiceItem | ✅ | ✅ | |
+| Quote | ✅ | ✅ | finalize, accept, cancel |
+| CreditNote | ✅ | ✅ | void |
 | Price | ✅ | ✅ | |
 | Product | ✅ | ✅ | |
 | Coupon | ✅ | ✅ | |
-| PromotionCode | ✅ | - | |
+| PromotionCode | ✅ | ✅ | |
 | TaxRate | ✅ | ✅ | |
-| UsageRecord | ✅ | - | |
+| UsageRecord | ✅ | ✅ | (via SubscriptionItem) |
 
 #### Connect & Payouts
 
@@ -221,8 +221,8 @@ The SDK follows a runtime-agnostic design:
 | Account | ✅ | ✅ | retrieve_current |
 | Transfer | ✅ | ✅ | |
 | Payout | ✅ | ✅ | cancel |
-| Topup | ✅ | - | |
-| ApplicationFee | ✅ | - | |
+| Topup | ✅ | ✅ | cancel |
+| ApplicationFee | ✅ | ✅ | |
 | BalanceTransaction | ✅ | ✅ | |
 | Balance | ✅ | ✅ | |
 
