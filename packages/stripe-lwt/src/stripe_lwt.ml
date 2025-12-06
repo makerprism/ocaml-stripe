@@ -385,7 +385,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/payment_intents/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/payment_intents/" ~resource_type:"payment_intent" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let update ~config ~id ?description ?metadata () =
@@ -396,28 +397,32 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:("/v1/payment_intents/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/payment_intents/" ~resource_type:"payment_intent" id in
+      post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let confirm ~config ~id ?payment_method () =
       let params = List.filter_map Fun.id [
         Option.map (fun v -> ("payment_method", v)) payment_method;
       ] in
-      post ~config ~path:("/v1/payment_intents/" ^ id ^ "/confirm") ~params () >>=
+      let path = path_with_id ~base:"/v1/payment_intents/" ~resource_type:"payment_intent" id in
+      post ~config ~path:(path ^ "/confirm") ~params () >>=
       handle_response ~parse_ok:of_json
 
     let capture ~config ~id ?amount_to_capture () =
       let params = List.filter_map Fun.id [
         Option.map (fun v -> ("amount_to_capture", string_of_int v)) amount_to_capture;
       ] in
-      post ~config ~path:("/v1/payment_intents/" ^ id ^ "/capture") ~params () >>=
+      let path = path_with_id ~base:"/v1/payment_intents/" ~resource_type:"payment_intent" id in
+      post ~config ~path:(path ^ "/capture") ~params () >>=
       handle_response ~parse_ok:of_json
 
     let cancel ~config ~id ?cancellation_reason () =
       let params = List.filter_map Fun.id [
         Option.map (fun v -> ("cancellation_reason", v)) cancellation_reason;
       ] in
-      post ~config ~path:("/v1/payment_intents/" ^ id ^ "/cancel") ~params () >>=
+      let path = path_with_id ~base:"/v1/payment_intents/" ~resource_type:"payment_intent" id in
+      post ~config ~path:(path ^ "/cancel") ~params () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?customer () =
@@ -435,7 +440,8 @@ module Client = struct
     open Stripe.Charge
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/charges/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/charges/" ~resource_type:"charge" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?customer ?payment_intent () =
@@ -452,7 +458,8 @@ module Client = struct
       let params = List.filter_map Fun.id [
         Option.map (fun v -> ("amount", string_of_int v)) amount;
       ] in
-      post ~config ~path:("/v1/charges/" ^ id ^ "/capture") ~params () >>=
+      let path = path_with_id ~base:"/v1/charges/" ~resource_type:"charge" id in
+      post ~config ~path:(path ^ "/capture") ~params () >>=
       handle_response ~parse_ok:of_json
   end
 
@@ -476,7 +483,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/refunds/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/refunds/" ~resource_type:"refund" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?charge ?payment_intent () =
@@ -516,7 +524,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/products/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/products/" ~resource_type:"product" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let update ~config ~id ?name ?description ?active ?metadata () =
@@ -529,7 +538,8 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:("/v1/products/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/products/" ~resource_type:"product" id in
+      post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?active () =
@@ -542,7 +552,8 @@ module Client = struct
       handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
 
     let delete ~config ~id () =
-      delete ~config ~path:("/v1/products/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/products/" ~resource_type:"product" id in
+      delete ~config ~path () >>=
       handle_response ~parse_ok:Stripe.Deleted.of_json
   end
 
@@ -569,7 +580,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/prices/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/prices/" ~resource_type:"price" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?product ?active () =
@@ -604,7 +616,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/subscriptions/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/subscriptions/" ~resource_type:"subscription" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let update ~config ~id ?cancel_at_period_end ?default_payment_method ?metadata () =
@@ -616,11 +629,13 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:("/v1/subscriptions/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/subscriptions/" ~resource_type:"subscription" id in
+      post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let cancel ~config ~id () =
-      delete ~config ~path:("/v1/subscriptions/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/subscriptions/" ~resource_type:"subscription" id in
+      delete ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?customer ?status () =
@@ -639,7 +654,8 @@ module Client = struct
     open Stripe.Invoice
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/invoices/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/invoices/" ~resource_type:"invoice" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?customer ?subscription ?status () =
@@ -657,18 +673,21 @@ module Client = struct
       let params = List.filter_map Fun.id [
         Option.map (fun v -> ("payment_method", v)) payment_method;
       ] in
-      post ~config ~path:("/v1/invoices/" ^ id ^ "/pay") ~params () >>=
+      let path = path_with_id ~base:"/v1/invoices/" ~resource_type:"invoice" id in
+      post ~config ~path:(path ^ "/pay") ~params () >>=
       handle_response ~parse_ok:of_json
 
     let void ~config ~id () =
-      post ~config ~path:("/v1/invoices/" ^ id ^ "/void") () >>=
+      let path = path_with_id ~base:"/v1/invoices/" ~resource_type:"invoice" id in
+      post ~config ~path:(path ^ "/void") () >>=
       handle_response ~parse_ok:of_json
   end
 
   (** Event API *)
   module Event = struct
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/events/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/events/" ~resource_type:"event" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:Stripe.Event.of_json
 
     let list ~config ?limit ?starting_after ?type_ ?created_gte ?created_lte () =
@@ -688,16 +707,19 @@ module Client = struct
     open Stripe.Payment_method
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/payment_methods/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/payment_methods/" ~resource_type:"payment_method" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let attach ~config ~id ~customer () =
       let params = [("customer", customer)] in
-      post ~config ~path:("/v1/payment_methods/" ^ id ^ "/attach") ~params () >>=
+      let path = path_with_id ~base:"/v1/payment_methods/" ~resource_type:"payment_method" id in
+      post ~config ~path:(path ^ "/attach") ~params () >>=
       handle_response ~parse_ok:of_json
 
     let detach ~config ~id () =
-      post ~config ~path:("/v1/payment_methods/" ^ id ^ "/detach") () >>=
+      let path = path_with_id ~base:"/v1/payment_methods/" ~resource_type:"payment_method" id in
+      post ~config ~path:(path ^ "/detach") () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ~customer ?type_ ?limit ?starting_after () =
@@ -736,18 +758,21 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/setup_intents/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/setup_intents/" ~resource_type:"setup_intent" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let confirm ~config ~id ?payment_method () =
       let params = List.filter_map Fun.id [
         Option.map (fun v -> ("payment_method", v)) payment_method;
       ] in
-      post ~config ~path:("/v1/setup_intents/" ^ id ^ "/confirm") ~params () >>=
+      let path = path_with_id ~base:"/v1/setup_intents/" ~resource_type:"setup_intent" id in
+      post ~config ~path:(path ^ "/confirm") ~params () >>=
       handle_response ~parse_ok:of_json
 
     let cancel ~config ~id () =
-      post ~config ~path:("/v1/setup_intents/" ^ id ^ "/cancel") () >>=
+      let path = path_with_id ~base:"/v1/setup_intents/" ~resource_type:"setup_intent" id in
+      post ~config ~path:(path ^ "/cancel") () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?customer ?payment_method () =
@@ -786,7 +811,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/coupons/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/coupons/" ~resource_type:"coupon" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let update ~config ~id ?name ?metadata () =
@@ -797,11 +823,13 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:("/v1/coupons/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/coupons/" ~resource_type:"coupon" id in
+      post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let delete ~config ~id () =
-      delete ~config ~path:("/v1/coupons/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/coupons/" ~resource_type:"coupon" id in
+      delete ~config ~path () >>=
       handle_response ~parse_ok:Stripe.Deleted.of_json
 
     let list ~config ?limit ?starting_after () =
@@ -818,7 +846,8 @@ module Client = struct
     open Stripe.Balance_transaction
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/balance_transactions/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/balance_transactions/" ~resource_type:"balance_transaction" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?type_ ?source ?created_gte ?created_lte () =
@@ -858,11 +887,13 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/payouts/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/payouts/" ~resource_type:"payout" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let cancel ~config ~id () =
-      post ~config ~path:("/v1/payouts/" ^ id ^ "/cancel") () >>=
+      let path = path_with_id ~base:"/v1/payouts/" ~resource_type:"payout" id in
+      post ~config ~path:(path ^ "/cancel") () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?status ?created_gte ?created_lte () =
@@ -931,11 +962,13 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/checkout/sessions/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/checkout/sessions/" ~resource_type:"checkout_session" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let expire ~config ~id () =
-      post ~config ~path:("/v1/checkout/sessions/" ^ id ^ "/expire") () >>=
+      let path = path_with_id ~base:"/v1/checkout/sessions/" ~resource_type:"checkout_session" id in
+      post ~config ~path:(path ^ "/expire") () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?customer ?payment_intent ?status () =
@@ -979,7 +1012,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/tax_rates/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/tax_rates/" ~resource_type:"tax_rate" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let update ~config ~id ?active ?description ?display_name ?jurisdiction
@@ -996,7 +1030,8 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:("/v1/tax_rates/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/tax_rates/" ~resource_type:"tax_rate" id in
+      post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?active ?inclusive () =
@@ -1028,7 +1063,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/payment_links/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/payment_links/" ~resource_type:"payment_link" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let update ~config ~id ?active ?metadata () =
@@ -1039,7 +1075,8 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:("/v1/payment_links/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/payment_links/" ~resource_type:"payment_link" id in
+      post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?active () =
@@ -1057,7 +1094,8 @@ module Client = struct
     open Stripe.Dispute
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/disputes/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/disputes/" ~resource_type:"dispute" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let update ~config ~id ?metadata () =
@@ -1065,11 +1103,13 @@ module Client = struct
         | Some m -> List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> []
       in
-      post ~config ~path:("/v1/disputes/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/disputes/" ~resource_type:"dispute" id in
+      post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let close ~config ~id () =
-      post ~config ~path:("/v1/disputes/" ^ id ^ "/close") () >>=
+      let path = path_with_id ~base:"/v1/disputes/" ~resource_type:"dispute" id in
+      post ~config ~path:(path ^ "/close") () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?charge ?payment_intent () =
@@ -1104,7 +1144,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/accounts/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/accounts/" ~resource_type:"account" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let retrieve_current ~config () =
@@ -1120,11 +1161,13 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:("/v1/accounts/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/accounts/" ~resource_type:"account" id in
+      post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let delete ~config ~id () =
-      delete ~config ~path:("/v1/accounts/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/accounts/" ~resource_type:"account" id in
+      delete ~config ~path () >>=
       handle_response ~parse_ok:Stripe.Deleted.of_json
 
     let list ~config ?limit ?starting_after () =
@@ -1162,7 +1205,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/transfers/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/transfers/" ~resource_type:"transfer" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let update ~config ~id ?description ?metadata () =
@@ -1173,7 +1217,8 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:("/v1/transfers/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/transfers/" ~resource_type:"transfer" id in
+      post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?destination ?transfer_group () =
@@ -1192,7 +1237,8 @@ module Client = struct
     open Stripe.File
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/files/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/files/" ~resource_type:"file" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?purpose () =
@@ -1223,7 +1269,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/file_links/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/file_links/" ~resource_type:"file_link" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let update ~config ~id ?expires_at ?metadata () =
@@ -1234,7 +1281,8 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:("/v1/file_links/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/file_links/" ~resource_type:"file_link" id in
+      post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?file ?expired () =
@@ -1251,7 +1299,8 @@ module Client = struct
   (** Mandate API *)
   module Mandate = struct
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/mandates/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/mandates/" ~resource_type:"mandate" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:Stripe.Mandate.of_json
   end
 
@@ -1260,11 +1309,13 @@ module Client = struct
     open Stripe.Review
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/reviews/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/reviews/" ~resource_type:"review" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let approve ~config ~id () =
-      post ~config ~path:("/v1/reviews/" ^ id ^ "/approve") () >>=
+      let path = path_with_id ~base:"/v1/reviews/" ~resource_type:"review" id in
+      post ~config ~path:(path ^ "/approve") () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after () =
@@ -1299,7 +1350,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/promotion_codes/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/promotion_codes/" ~resource_type:"promotion_code" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let update ~config ~id ?active ?metadata () =
@@ -1310,7 +1362,8 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:("/v1/promotion_codes/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/promotion_codes/" ~resource_type:"promotion_code" id in
+      post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?code ?coupon ?customer ?active () =
@@ -1351,7 +1404,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/invoiceitems/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/invoiceitems/" ~resource_type:"invoice_item" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let update ~config ~id ?amount ?description ?quantity ?unit_amount ?metadata () =
@@ -1365,11 +1419,13 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:("/v1/invoiceitems/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/invoiceitems/" ~resource_type:"invoice_item" id in
+      post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let delete ~config ~id () =
-      delete ~config ~path:("/v1/invoiceitems/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/invoiceitems/" ~resource_type:"invoice_item" id in
+      delete ~config ~path () >>=
       handle_response ~parse_ok:Stripe.Deleted.of_json
 
     let list ~config ?limit ?starting_after ?customer ?invoice () =
@@ -1403,7 +1459,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/quotes/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/quotes/" ~resource_type:"quote" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let update ~config ~id ?description ?expires_at ?metadata () =
@@ -1415,19 +1472,23 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:("/v1/quotes/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/quotes/" ~resource_type:"quote" id in
+      post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let finalize_quote ~config ~id () =
-      post ~config ~path:("/v1/quotes/" ^ id ^ "/finalize") () >>=
+      let path = path_with_id ~base:"/v1/quotes/" ~resource_type:"quote" id in
+      post ~config ~path:(path ^ "/finalize") () >>=
       handle_response ~parse_ok:of_json
 
     let accept ~config ~id () =
-      post ~config ~path:("/v1/quotes/" ^ id ^ "/accept") () >>=
+      let path = path_with_id ~base:"/v1/quotes/" ~resource_type:"quote" id in
+      post ~config ~path:(path ^ "/accept") () >>=
       handle_response ~parse_ok:of_json
 
     let cancel ~config ~id () =
-      post ~config ~path:("/v1/quotes/" ^ id ^ "/cancel") () >>=
+      let path = path_with_id ~base:"/v1/quotes/" ~resource_type:"quote" id in
+      post ~config ~path:(path ^ "/cancel") () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?customer ?status () =
@@ -1463,7 +1524,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/credit_notes/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/credit_notes/" ~resource_type:"credit_note" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let update ~config ~id ?memo ?metadata () =
@@ -1474,11 +1536,13 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:("/v1/credit_notes/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/credit_notes/" ~resource_type:"credit_note" id in
+      post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let void_credit_note ~config ~id () =
-      post ~config ~path:("/v1/credit_notes/" ^ id ^ "/void") () >>=
+      let path = path_with_id ~base:"/v1/credit_notes/" ~resource_type:"credit_note" id in
+      post ~config ~path:(path ^ "/void") () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?invoice ?customer () =
@@ -1497,7 +1561,8 @@ module Client = struct
     open Stripe.Application_fee
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/application_fees/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/application_fees/" ~resource_type:"application_fee" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?charge () =
@@ -1532,7 +1597,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/topups/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/topups/" ~resource_type:"topup" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let update ~config ~id ?description ?metadata () =
@@ -1543,11 +1609,13 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:("/v1/topups/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/topups/" ~resource_type:"topup" id in
+      post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let cancel ~config ~id () =
-      post ~config ~path:("/v1/topups/" ^ id ^ "/cancel") () >>=
+      let path = path_with_id ~base:"/v1/topups/" ~resource_type:"topup" id in
+      post ~config ~path:(path ^ "/cancel") () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?status () =
@@ -1582,7 +1650,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/subscription_items/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/subscription_items/" ~resource_type:"subscription_item" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let update ~config ~id ?price ?quantity ?metadata () =
@@ -1594,11 +1663,13 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:("/v1/subscription_items/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/subscription_items/" ~resource_type:"subscription_item" id in
+      post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let delete ~config ~id () =
-      delete ~config ~path:("/v1/subscription_items/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/subscription_items/" ~resource_type:"subscription_item" id in
+      delete ~config ~path () >>=
       handle_response ~parse_ok:Stripe.Deleted.of_json
 
     let list ~config ~subscription ?limit ?starting_after () =
@@ -1621,8 +1692,9 @@ module Client = struct
       let params = params @ List.filter_map Fun.id [
         Option.map (fun v -> ("action", v)) action;
       ] in
+      let path = path_with_id ~base:"/v1/subscription_items/" ~resource_type:"subscription_item" id in
       post ~config ~options 
-        ~path:("/v1/subscription_items/" ^ id ^ "/usage_records") 
+        ~path:(path ^ "/usage_records") 
         ~params () >>=
       handle_response ~parse_ok:Stripe.Usage_record.of_json
   end
@@ -1647,7 +1719,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/subscription_schedules/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/subscription_schedules/" ~resource_type:"subscription_schedule" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let update ~config ~id ?end_behavior ?metadata () =
@@ -1658,15 +1731,18 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:("/v1/subscription_schedules/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/subscription_schedules/" ~resource_type:"subscription_schedule" id in
+      post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let cancel ~config ~id () =
-      post ~config ~path:("/v1/subscription_schedules/" ^ id ^ "/cancel") () >>=
+      let path = path_with_id ~base:"/v1/subscription_schedules/" ~resource_type:"subscription_schedule" id in
+      post ~config ~path:(path ^ "/cancel") () >>=
       handle_response ~parse_ok:of_json
 
     let release ~config ~id () =
-      post ~config ~path:("/v1/subscription_schedules/" ^ id ^ "/release") () >>=
+      let path = path_with_id ~base:"/v1/subscription_schedules/" ~resource_type:"subscription_schedule" id in
+      post ~config ~path:(path ^ "/release") () >>=
       handle_response ~parse_ok:of_json
 
     let list ~config ?limit ?starting_after ?customer ?scheduled () =
@@ -1719,6 +1795,7 @@ module Client = struct
     let create ~config ~customer_id ~amount ~currency 
         ?idempotency_key ?description ?metadata () =
       let options = { default_request_options with idempotency_key } in
+      let validated_customer_id = Stripe_core.validate_id ~resource_type:"customer" customer_id in
       let params = [
         ("amount", string_of_int amount);
         ("currency", currency);
@@ -1731,19 +1808,23 @@ module Client = struct
         | None -> params
       in
       post ~config ~options 
-        ~path:(Printf.sprintf "/v1/customers/%s/balance_transactions" customer_id) 
+        ~path:(Printf.sprintf "/v1/customers/%s/balance_transactions" validated_customer_id) 
         ~params () >>=
       handle_response ~parse_ok:of_json
 
     (** Retrieve a customer balance transaction *)
     let retrieve ~config ~customer_id ~transaction_id () =
+      let validated_customer_id = Stripe_core.validate_id ~resource_type:"customer" customer_id in
+      let validated_transaction_id = Stripe_core.validate_id ~resource_type:"customer_balance_transaction" transaction_id in
       get ~config 
         ~path:(Printf.sprintf "/v1/customers/%s/balance_transactions/%s" 
-                 customer_id transaction_id) () >>=
+                 validated_customer_id validated_transaction_id) () >>=
       handle_response ~parse_ok:of_json
 
     (** Update a customer balance transaction *)
     let update ~config ~customer_id ~transaction_id ?description ?metadata () =
+      let validated_customer_id = Stripe_core.validate_id ~resource_type:"customer" customer_id in
+      let validated_transaction_id = Stripe_core.validate_id ~resource_type:"customer_balance_transaction" transaction_id in
       let params = List.filter_map Fun.id [
         Option.map (fun v -> ("description", v)) description;
       ] in
@@ -1753,19 +1834,20 @@ module Client = struct
       in
       post ~config 
         ~path:(Printf.sprintf "/v1/customers/%s/balance_transactions/%s" 
-                 customer_id transaction_id) 
+                 validated_customer_id validated_transaction_id) 
         ~params () >>=
       handle_response ~parse_ok:of_json
 
     (** List customer balance transactions *)
     let list ~config ~customer_id ?limit ?starting_after ?ending_before () =
+      let validated_customer_id = Stripe_core.validate_id ~resource_type:"customer" customer_id in
       let params = List.filter_map Fun.id [
         Option.map (fun v -> ("limit", string_of_int v)) limit;
         Option.map (fun v -> ("starting_after", v)) starting_after;
         Option.map (fun v -> ("ending_before", v)) ending_before;
       ] in
       get ~config 
-        ~path:(Printf.sprintf "/v1/customers/%s/balance_transactions" customer_id) 
+        ~path:(Printf.sprintf "/v1/customers/%s/balance_transactions" validated_customer_id) 
         ~params () >>=
       handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
   end
