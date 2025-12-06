@@ -3,12 +3,12 @@ opam-version: "2.0"
 synopsis: "Core interfaces for Stripe API client"
 description:
   "Runtime-agnostic, HTTP-client-agnostic core interfaces for building Stripe API clients. This package provides CPS-style interfaces that can be implemented with any async runtime (Lwt, Eio, synchronous) and any HTTP client library."
-maintainer: ["your-email@example.com"]
-authors: ["Your Name"]
+maintainer: ["sabine@makerprism.com"]
+authors: ["Sabine Schmaltz"]
 license: "MIT"
-homepage: "https://github.com/your-username/ocaml-stripe"
-doc: "https://github.com/your-username/ocaml-stripe"
-bug-reports: "https://github.com/your-username/ocaml-stripe/issues"
+homepage: "https://github.com/makerprism/ocaml-stripe"
+doc: "https://github.com/makerprism/ocaml-stripe"
+bug-reports: "https://github.com/makerprism/ocaml-stripe/issues"
 depends: [
   "ocaml" {>= "4.14"}
   "dune" {>= "3.17" & >= "3.0"}
@@ -16,6 +16,7 @@ depends: [
   "uri"
   "ptime"
   "base64"
+  "digestif"
   "alcotest" {with-test}
   "odoc" {with-doc}
 ]
@@ -33,4 +34,4 @@ build: [
     "@doc" {with-doc}
   ]
 ]
-dev-repo: "git+https://github.com/your-username/ocaml-stripe.git"
+dev-repo: "git+https://github.com/makerprism/ocaml-stripe.git"

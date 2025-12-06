@@ -3,12 +3,12 @@
 
 (generate_opam_files true)
 
-(source (github your-username/ocaml-stripe))
+(source (github makerprism/ocaml-stripe))
 (license MIT)
-(authors "Your Name")
-(maintainers "your-email@example.com")
-(documentation "https://github.com/your-username/ocaml-stripe")
-(bug_reports "https://github.com/your-username/ocaml-stripe/issues")
+(authors "Sabine Schmaltz")
+(maintainers "sabine@makerprism.com")
+(documentation "https://github.com/makerprism/ocaml-stripe")
+(bug_reports "https://github.com/makerprism/ocaml-stripe/issues")
 
 (package
  (name stripe-core)
@@ -21,6 +21,7 @@
   uri
   ptime
   base64
+  digestif
   (alcotest :with-test)))
 
 (package

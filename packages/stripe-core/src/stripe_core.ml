@@ -130,3 +130,120 @@ module Base64 = struct
     (* Simple base64 encoding - in real implementation use base64 library *)
     Base64.encode_string s
 end
+
+(** Webhook signature verification error *)
+type signature_verification_error = {
+  message : string;
+  sig_header : string;
+  payload : string;
+}
+
+exception Signature_verification_error of signature_verification_error
+
+(** Webhook signature verification - adapted from stripe-python *)
+module Webhook_signature = struct
+  let expected_scheme = "v1"
+  let default_tolerance = 300 (* 5 minutes in seconds *)
+
+  (** Compute HMAC-SHA256 signature *)
+  let compute_signature ~payload ~secret =
+    let key = Digestif.SHA256.hmac_string ~key:secret payload in
+    Digestif.SHA256.to_hex key
+
+  (** Constant-time string comparison to prevent timing attacks *)
+  let secure_compare a b =
+    if String.length a <> String.length b then false
+    else
+      let result = ref 0 in
+      for i = 0 to String.length a - 1 do
+        result := !result lor (Char.code a.[i] lxor Char.code b.[i])
+      done;
+      !result = 0
+
+  (** Parse the Stripe-Signature header to extract timestamp and signatures *)
+  let get_timestamp_and_signatures header scheme =
+    let items = String.split_on_char ',' header in
+    let parse_item item =
+      match String.split_on_char '=' item with
+      | [key; value] -> Some (String.trim key, String.trim value)
+      | _ -> None
+    in
+    let parsed = List.filter_map parse_item items in
+    let timestamp = 
+      List.find_map (fun (k, v) -> 
+        if k = "t" then int_of_string_opt v else None
+      ) parsed
+    in
+    let signatures = 
+      List.filter_map (fun (k, v) -> 
+        if k = scheme then Some v else None
+      ) parsed
+    in
+    (timestamp, signatures)
+
+  (** Verify the webhook signature header *)
+  let verify_header ~payload ~header ~secret ?(tolerance = default_tolerance) () =
+    let timestamp, signatures = 
+      try get_timestamp_and_signatures header expected_scheme
+      with _ -> 
+        raise (Signature_verification_error {
+          message = "Unable to extract timestamp and signatures from header";
+          sig_header = header;
+          payload;
+        })
+    in
+    
+    let timestamp = match timestamp with
+      | Some t -> t
+      | None -> 
+        raise (Signature_verification_error {
+          message = "Unable to extract timestamp and signatures from header";
+          sig_header = header;
+          payload;
+        })
+    in
+    
+    if signatures = [] then
+      raise (Signature_verification_error {
+        message = Printf.sprintf "No signatures found with expected scheme %s" expected_scheme;
+        sig_header = header;
+        payload;
+      });
+    
+    let signed_payload = Printf.sprintf "%d.%s" timestamp payload in
+    let expected_sig = compute_signature ~payload:signed_payload ~secret in
+    
+    let has_valid_signature = 
+      List.exists (fun sig_ -> secure_compare expected_sig sig_) signatures
+    in
+    
+    if not has_valid_signature then
+      raise (Signature_verification_error {
+        message = "No signatures found matching the expected signature for payload";
+        sig_header = header;
+        payload;
+      });
+    
+    (* Check timestamp tolerance if specified *)
+    if tolerance > 0 then begin
+      let now = int_of_float (Unix.gettimeofday ()) in
+      if timestamp < now - tolerance then
+        raise (Signature_verification_error {
+          message = Printf.sprintf "Timestamp outside the tolerance zone (%d)" timestamp;
+          sig_header = header;
+          payload;
+        })
+    end;
+    
+    true
+end
+
+(** Webhook module for constructing events from webhook payloads *)
+module Webhook = struct
+  let default_tolerance = Webhook_signature.default_tolerance
+
+  (** Verify webhook signature - returns true or raises Signature_verification_error *)
+  let verify_signature ~payload ~sig_header ~secret ?tolerance () =
+    let tolerance = Option.value ~default:default_tolerance tolerance in
+    Webhook_signature.verify_header ~payload ~header:sig_header ~secret ~tolerance ()
+end
