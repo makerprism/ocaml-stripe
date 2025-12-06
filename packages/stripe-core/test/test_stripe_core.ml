@@ -351,6 +351,121 @@ let test_build_form_body_unicode () =
   check bool "encodes space" true 
     (String.sub body 0 11 = "description")
 
+(** Pagination tests *)
+
+(* Test: last_id extracts ID from last item *)
+let test_last_id () =
+  let response = {
+    Stripe_core.data = [
+      ("id_1", "name1");
+      ("id_2", "name2");
+      ("id_3", "name3");
+    ];
+    has_more = true;
+    url = "/v1/test";
+  } in
+  let result = Stripe_core.last_id ~get_id:fst response in
+  check (option string) "last_id" (Some "id_3") result
+
+(* Test: last_id returns None for empty list *)
+let test_last_id_empty () =
+  let response = {
+    Stripe_core.data = [];
+    has_more = false;
+    url = "/v1/test";
+  } in
+  let result = Stripe_core.last_id ~get_id:fst response in
+  check (option string) "last_id empty" None result
+
+(* Test: has_next_page returns true when has_more is true *)
+let test_has_next_page_true () =
+  let response = {
+    Stripe_core.data = [("id_1", "name1")];
+    has_more = true;
+    url = "/v1/test";
+  } in
+  check bool "has_next_page true" true (Stripe_core.has_next_page response)
+
+(* Test: has_next_page returns false when has_more is false *)
+let test_has_next_page_false () =
+  let response = {
+    Stripe_core.data = [("id_1", "name1")];
+    has_more = false;
+    url = "/v1/test";
+  } in
+  check bool "has_next_page false" false (Stripe_core.has_next_page response)
+
+(* Test: Pagination.next_page_cursor returns cursor when has_more *)
+let test_next_page_cursor () =
+  let response = {
+    Stripe_core.data = [("id_1", "name1"); ("id_2", "name2")];
+    has_more = true;
+    url = "/v1/test";
+  } in
+  let cursor = Stripe_core.Pagination.next_page_cursor ~get_id:fst response in
+  check (option string) "cursor" (Some "id_2") cursor
+
+(* Test: Pagination.next_page_cursor returns None when not has_more *)
+let test_next_page_cursor_no_more () =
+  let response = {
+    Stripe_core.data = [("id_1", "name1"); ("id_2", "name2")];
+    has_more = false;
+    url = "/v1/test";
+  } in
+  let cursor = Stripe_core.Pagination.next_page_cursor ~get_id:fst response in
+  check (option string) "cursor none" None cursor
+
+(* Test: Pagination.collect_all_sync collects from multiple pages *)
+let test_collect_all_sync () =
+  (* Simulate fetching pages *)
+  let pages = ref [
+    { Stripe_core.data = ["a"; "b"]; has_more = true; url = "/v1/test" };
+    { Stripe_core.data = ["c"; "d"]; has_more = true; url = "/v1/test" };
+    { Stripe_core.data = ["e"]; has_more = false; url = "/v1/test" };
+  ] in
+  let fetch_page ?starting_after:_ () =
+    match !pages with
+    | [] -> Ok { Stripe_core.data = []; has_more = false; url = "/v1/test" }
+    | page :: rest -> 
+      pages := rest;
+      Ok page
+  in
+  let result = Stripe_core.Pagination.collect_all_sync 
+    ~get_id:Fun.id 
+    ~fetch_page 
+    ()
+  in
+  match result with
+  | Ok items -> 
+    check (list string) "all items" ["a"; "b"; "c"; "d"; "e"] items
+  | Error _ -> fail "Expected Ok"
+
+(* Test: Pagination.collect_all_sync stops on error *)
+let test_collect_all_sync_error () =
+  let call_count = ref 0 in
+  let fetch_page ?starting_after:_ () =
+    incr call_count;
+    if !call_count = 1 then
+      Ok { Stripe_core.data = ["a"; "b"]; has_more = true; url = "/v1/test" }
+    else
+      Error { 
+        Stripe_core.error_type = Api_error; 
+        message = "Test error"; 
+        code = None; 
+        param = None; 
+        decline_code = None; 
+        doc_url = None 
+      }
+  in
+  let result = Stripe_core.Pagination.collect_all_sync 
+    ~get_id:Fun.id 
+    ~fetch_page 
+    ()
+  in
+  match result with
+  | Ok _ -> fail "Expected Error"
+  | Error e -> check string "error message" "Test error" e.message
+
 (** Header construction tests - adapted from stripe-python *)
 
 (* Test: auth header uses Bearer token *)
@@ -449,5 +564,15 @@ let () =
       test_case "build_headers_with_key" `Quick test_build_headers_with_idempotency_key;
       test_case "build_headers_with_account" `Quick test_build_headers_with_stripe_account;
       test_case "build_headers_without_options" `Quick test_build_headers_without_options;
+    ];
+    "pagination", [
+      test_case "last_id" `Quick test_last_id;
+      test_case "last_id_empty" `Quick test_last_id_empty;
+      test_case "has_next_page_true" `Quick test_has_next_page_true;
+      test_case "has_next_page_false" `Quick test_has_next_page_false;
+      test_case "next_page_cursor" `Quick test_next_page_cursor;
+      test_case "next_page_cursor_no_more" `Quick test_next_page_cursor_no_more;
+      test_case "collect_all_sync" `Quick test_collect_all_sync;
+      test_case "collect_all_sync_error" `Quick test_collect_all_sync_error;
     ];
   ]

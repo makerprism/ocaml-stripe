@@ -36,7 +36,24 @@ type request_options = Stripe_core.request_options = {
 let default_request_options = Stripe_core.default_request_options
 let generate_idempotency_key = Stripe_core.generate_idempotency_key
 
-(** Make a Stripe API request using Lwt *)
+(** Check if a response status code is retryable.
+    Stripe recommends retrying on connection errors and 5xx server errors.
+    Additionally, retry on 409 Conflict (rate limiting, lock contention). *)
+let is_retryable_status_code status_code =
+  status_code >= 500 || status_code = 409
+
+(** Calculate sleep duration with exponential backoff and jitter.
+    Based on stripe-python's retry logic. *)
+let sleep_time_for_retry ~retry_count ~initial_delay ~max_delay =
+  (* Exponential backoff: initial_delay * 2^retry_count *)
+  let base_delay = initial_delay *. (2.0 ** float_of_int retry_count) in
+  (* Add jitter: random value between 0 and base_delay *)
+  let jitter = Random.float base_delay in
+  let delay = base_delay +. jitter in
+  (* Cap at max_delay *)
+  Float.min delay max_delay
+
+(** Make a Stripe API request using Lwt with automatic retries *)
 let request
     ~(config : Stripe_core.config)
     ~(meth : Stripe_core.http_method)
@@ -52,7 +69,31 @@ let request
   else
     None
   in
-  Lwt_http_client.request ~meth ~url ~headers ?body ()
+  let initial_delay = 0.5 in  (* Start with 500ms *)
+  let max_delay = 8.0 in      (* Cap at 8 seconds *)
+  
+  let rec attempt retry_count =
+    Lwt.catch
+      (fun () ->
+        Lwt_http_client.request ~meth ~url ~headers ?body () >>= fun response ->
+        (* Check if we should retry based on status code *)
+        if is_retryable_status_code response.status_code 
+           && retry_count < config.max_network_retries then
+          let sleep_time = sleep_time_for_retry ~retry_count ~initial_delay ~max_delay in
+          Lwt_unix.sleep sleep_time >>= fun () ->
+          attempt (retry_count + 1)
+        else
+          Lwt.return response)
+      (fun exn ->
+        (* Retry on network errors *)
+        if retry_count < config.max_network_retries then
+          let sleep_time = sleep_time_for_retry ~retry_count ~initial_delay ~max_delay in
+          Lwt_unix.sleep sleep_time >>= fun () ->
+          attempt (retry_count + 1)
+        else
+          Lwt.fail exn)
+  in
+  attempt 0
 
 (** Make a GET request *)
 let get ~config ~path ?options ?params () =
@@ -85,6 +126,149 @@ let handle_response ~parse_ok response =
         decline_code = None;
         doc_url = None;
       }
+
+(** Pagination helpers for Lwt *)
+module Pagination = struct
+  (** Fold over all pages of a list operation, accumulating results.
+      
+      @param get_id Function to extract the ID from each item (for cursor pagination)
+      @param fetch_page Function that fetches a page, taking an optional starting_after cursor
+      @param init Initial accumulator value
+      @param f Function to combine accumulator with each page's response
+      
+      Example:
+      {[
+        Pagination.fold_pages
+          ~get_id:(fun c -> c.Stripe.Customer.id)
+          ~fetch_page:(fun ?starting_after () ->
+            Client.Customer.list ~config ?starting_after ())
+          ~init:[]
+          ~f:(fun acc response -> Lwt.return (acc @ response.Stripe_core.data))
+          ()
+      ]}
+  *)
+  let rec fold_pages
+      ~get_id
+      ~fetch_page
+      ~init
+      ~f
+      ?starting_after
+      () =
+    fetch_page ?starting_after () >>= function
+    | Error e -> Lwt.return_error e
+    | Ok response ->
+      f init response >>= fun acc ->
+      if response.Stripe_core.has_more then
+        match List.rev response.Stripe_core.data with
+        | [] -> Lwt.return_ok acc
+        | last :: _ ->
+          let cursor = get_id last in
+          fold_pages ~get_id ~fetch_page ~init:acc ~f ~starting_after:(Some cursor) ()
+      else
+        Lwt.return_ok acc
+  
+  (** Collect all items from all pages into a single list.
+      
+      @param get_id Function to extract the ID from each item
+      @param fetch_page Function that fetches a page
+      
+      Example:
+      {[
+        let%lwt all_customers = Pagination.collect_all
+          ~get_id:(fun c -> c.Stripe.Customer.id)
+          ~fetch_page:(fun ?starting_after () ->
+            Client.Customer.list ~config ?starting_after ())
+          ()
+        in
+        ...
+      ]}
+  *)
+  let collect_all ~get_id ~fetch_page () =
+    fold_pages
+      ~get_id
+      ~fetch_page
+      ~init:[]
+      ~f:(fun acc response -> Lwt.return (acc @ response.Stripe_core.data))
+      ()
+  
+  (** Iterate over all items across all pages, calling a function for each item.
+      Stops and returns Error if any page fetch fails.
+      
+      @param get_id Function to extract the ID from each item
+      @param fetch_page Function that fetches a page
+      @param f Function to call for each item
+      
+      Example:
+      {[
+        Pagination.iter_all
+          ~get_id:(fun c -> c.Stripe.Customer.id)
+          ~fetch_page:(fun ?starting_after () ->
+            Client.Customer.list ~config ?starting_after ())
+          ~f:(fun customer -> 
+            Lwt_io.printlf "Customer: %s" customer.email)
+          ()
+      ]}
+  *)
+  let iter_all ~get_id ~fetch_page ~f () =
+    fold_pages
+      ~get_id
+      ~fetch_page
+      ~init:()
+      ~f:(fun () response ->
+        Lwt_list.iter_s f response.Stripe_core.data)
+      ()
+  
+  (** Create an Lwt_stream that yields items from all pages lazily.
+      The stream fetches pages on demand as items are consumed.
+      
+      @param get_id Function to extract the ID from each item
+      @param fetch_page Function that fetches a page
+      
+      Example:
+      {[
+        let stream = Pagination.to_stream
+          ~get_id:(fun c -> c.Stripe.Customer.id)
+          ~fetch_page:(fun ?starting_after () ->
+            Client.Customer.list ~config ?starting_after ())
+          ()
+        in
+        Lwt_stream.iter_s (fun customer -> ...) stream
+      ]}
+  *)
+  let to_stream ~get_id ~fetch_page () =
+    let current_page = ref [] in
+    let cursor = ref None in
+    let has_more = ref true in
+    let fetch_next () =
+      if not !has_more then
+        Lwt.return_none
+      else
+        fetch_page ?starting_after:!cursor () >>= function
+        | Error _ -> 
+          has_more := false;
+          Lwt.return_none
+        | Ok response ->
+          has_more := response.Stripe_core.has_more;
+          (match List.rev response.Stripe_core.data with
+           | [] -> cursor := None
+           | last :: _ -> cursor := Some (get_id last));
+          current_page := response.Stripe_core.data;
+          Lwt.return_some response.Stripe_core.data
+    in
+    Lwt_stream.from (fun () ->
+      match !current_page with
+      | item :: rest ->
+        current_page := rest;
+        Lwt.return_some item
+      | [] ->
+        fetch_next () >>= function
+        | None -> Lwt.return_none
+        | Some [] -> Lwt.return_none
+        | Some (item :: rest) ->
+          current_page := rest;
+          Lwt.return_some item
+    )
+end
 
 (** Stripe API Client using Lwt *)
 module Client = struct

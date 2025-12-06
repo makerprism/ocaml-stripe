@@ -144,6 +144,64 @@ let cancel_subscription config ~id =
   Client.Subscription.cancel ~config ~id ()
 ```
 
+### Pagination
+
+The SDK provides helpers for iterating through paginated list results:
+
+```ocaml
+open Lwt.Syntax
+open Stripe_lwt
+
+(* Collect all customers into a single list *)
+let get_all_customers config =
+  Pagination.collect_all
+    ~get_id:(fun c -> c.Stripe.Customer.id)
+    ~fetch_page:(fun ?starting_after () ->
+      Client.Customer.list ~config ?starting_after ())
+    ()
+
+(* Iterate over all customers *)
+let process_all_customers config =
+  Pagination.iter_all
+    ~get_id:(fun c -> c.Stripe.Customer.id)
+    ~fetch_page:(fun ?starting_after () ->
+      Client.Customer.list ~config ?starting_after ())
+    ~f:(fun customer ->
+      Lwt_io.printlf "Customer: %s" customer.Stripe.Customer.id)
+    ()
+
+(* Stream customers lazily *)
+let stream_customers config =
+  let stream = Pagination.to_stream
+    ~get_id:(fun c -> c.Stripe.Customer.id)
+    ~fetch_page:(fun ?starting_after () ->
+      Client.Customer.list ~config ?starting_after ())
+    ()
+  in
+  Lwt_stream.iter_s (fun customer ->
+    Lwt_io.printlf "Customer: %s" customer.Stripe.Customer.id
+  ) stream
+```
+
+### Automatic Retries
+
+The SDK automatically retries failed requests with exponential backoff:
+
+```ocaml
+(* Enable retries (default is 0 = no retries) *)
+let config = { 
+  (Stripe_lwt.Client.create ~api_key:"sk_test_...") with 
+  max_network_retries = 2 
+}
+
+(* Requests will now retry up to 2 times on:
+   - Network errors (connection failures, timeouts)
+   - 5xx server errors
+   - 409 Conflict errors (rate limiting)
+   
+   Retries use exponential backoff with jitter. *)
+```
+
 ### Webhook Signature Verification
 
 ```ocaml
@@ -267,6 +325,8 @@ The SDK follows a runtime-agnostic design:
 - **Type Safety**: Strongly typed resource models with variant types for statuses
 - **Runtime Agnostic**: Core logic works with any async runtime
 - **Idiomatic OCaml**: Uses Result types, optional parameters, and modules
+- **Pagination Helpers**: Easy iteration through paginated results with `collect_all`, `iter_all`, `fold_pages`, and `to_stream`
+- **Automatic Retries**: Exponential backoff with jitter for network errors and 5xx responses
 
 ## API Reference
 

@@ -155,6 +155,71 @@ type 'a list_response = {
   url : string;
 }
 
+(** Get the ID of the last item in a list response for pagination.
+    Requires a function to extract the ID from each item. *)
+let last_id ~get_id (response : 'a list_response) : string option =
+  match List.rev response.data with
+  | [] -> None
+  | last :: _ -> Some (get_id last)
+
+(** Check if there are more pages available *)
+let has_next_page (response : 'a list_response) : bool =
+  response.has_more
+
+(** Pagination helpers for iterating through list responses *)
+module Pagination = struct
+  (** Get the ID of the last item for use with starting_after *)
+  let next_page_cursor ~get_id (response : 'a list_response) : string option =
+    if response.has_more then
+      match List.rev response.data with
+      | [] -> None
+      | last :: _ -> Some (get_id last)
+    else
+      None
+  
+  (** Accumulate items from multiple pages into a single list.
+      [fetch_page] should take an optional starting_after cursor and return
+      the next page of results.
+      
+      Example usage with Lwt:
+      {[
+        let get_all_customers ~config =
+          Pagination.fold_pages
+            ~get_id:(fun c -> c.Stripe.Customer.id)
+            ~fetch_page:(fun ?starting_after () ->
+              Customer.list ~config ?starting_after ())
+            ~init:[]
+            ~f:(fun acc response -> Lwt.return (acc @ response.data))
+            ()
+      ]}
+  *)
+  let rec fold_pages_sync
+      ~get_id
+      ~fetch_page
+      ~init
+      ~f
+      ?starting_after
+      () =
+    match fetch_page ?starting_after () with
+    | Error e -> Error e
+    | Ok response ->
+      let acc = f init response in
+      match next_page_cursor ~get_id response with
+      | None -> Ok acc
+      | Some cursor ->
+        fold_pages_sync ~get_id ~fetch_page ~init:acc ~f ~starting_after:(Some cursor) ()
+  
+  (** Collect all items from all pages into a single list (synchronous version).
+      Returns Error if any page fetch fails. *)
+  let collect_all_sync ~get_id ~fetch_page () =
+    fold_pages_sync
+      ~get_id
+      ~fetch_page
+      ~init:[]
+      ~f:(fun acc response -> acc @ response.data)
+      ()
+end
+
 (** Result type for API calls *)
 type 'a api_result = ('a, stripe_error) result
 
