@@ -1,5 +1,14 @@
 (** Stripe Core - Runtime-agnostic interfaces for Stripe API *)
 
+(** {1 Security Notes}
+    
+    This library handles sensitive payment data. Users should:
+    - Never log config objects (contains API keys)
+    - Use environment variables for API keys
+    - Only transmit client_secret values over HTTPS to frontend clients
+    - Never log raw API responses (may contain sensitive data)
+*)
+
 (** HTTP Method type *)
 type http_method = GET | POST | DELETE | PUT | PATCH
 
@@ -101,18 +110,24 @@ let default_request_options = {
   stripe_account = None;
 }
 
-(** Generate a random idempotency key (UUID v4 format) *)
+(** Generate a cryptographically secure random idempotency key (UUID v4 format).
+    Uses /dev/urandom for secure random bytes. *)
 let generate_idempotency_key () =
-  let hex_chars = "0123456789abcdef" in
-  let random_hex n =
-    String.init n (fun _ -> hex_chars.[Random.int 16])
-  in
-  Printf.sprintf "%s-%s-%s-%s-%s"
-    (random_hex 8)
-    (random_hex 4)
-    (random_hex 4)
-    (random_hex 4)
-    (random_hex 12)
+  (* Read 16 random bytes from /dev/urandom for cryptographic security *)
+  let ic = open_in_bin "/dev/urandom" in
+  let bytes = really_input_string ic 16 in
+  close_in ic;
+  (* Format as UUID v4 *)
+  let hex_of_char c = Printf.sprintf "%02x" (Char.code c) in
+  Printf.sprintf "%s%s%s%s-%s%s-%s%s-%s%s-%s%s%s%s%s%s"
+    (hex_of_char bytes.[0]) (hex_of_char bytes.[1])
+    (hex_of_char bytes.[2]) (hex_of_char bytes.[3])
+    (hex_of_char bytes.[4]) (hex_of_char bytes.[5])
+    (hex_of_char bytes.[6]) (hex_of_char bytes.[7])
+    (hex_of_char bytes.[8]) (hex_of_char bytes.[9])
+    (hex_of_char bytes.[10]) (hex_of_char bytes.[11])
+    (hex_of_char bytes.[12]) (hex_of_char bytes.[13])
+    (hex_of_char bytes.[14]) (hex_of_char bytes.[15])
 
 (** Build authorization header *)
 let auth_header config =
@@ -147,6 +162,62 @@ let build_form_body params =
   params
   |> List.map url_encode_param
   |> String.concat "&"
+
+(** {2 Security Validation} *)
+
+(** Validate that a Stripe resource ID matches expected format.
+    Stripe IDs are alphanumeric with underscores, prefixed by resource type.
+    Returns true if valid, false otherwise.
+    
+    @param id The ID to validate
+    @return true if the ID appears to be a valid Stripe ID *)
+let is_valid_stripe_id id =
+  let len = String.length id in
+  if len < 3 || len > 255 then false
+  else
+    (* Must contain only alphanumeric chars and underscores *)
+    let valid_char c =
+      (c >= 'a' && c <= 'z') ||
+      (c >= 'A' && c <= 'Z') ||
+      (c >= '0' && c <= '9') ||
+      c = '_'
+    in
+    try
+      for i = 0 to len - 1 do
+        if not (valid_char id.[i]) then raise Exit
+      done;
+      (* Should have at least one underscore (prefix separator) *)
+      String.contains id '_'
+    with Exit -> false
+
+(** Validate and sanitize a resource ID for use in URL paths.
+    Raises Invalid_argument if the ID is invalid.
+    
+    @param resource_type Description of the resource type (for error messages)
+    @param id The ID to validate
+    @return The validated ID (unchanged if valid)
+    @raise Invalid_argument if the ID is invalid *)
+let validate_id ~resource_type id =
+  if is_valid_stripe_id id then id
+  else invalid_arg (Printf.sprintf "Invalid %s ID: %s" resource_type id)
+
+(** Validate that an API base URL uses HTTPS.
+    Raises Invalid_argument if not HTTPS.
+    
+    @param url The base URL to validate
+    @return The validated URL
+    @raise Invalid_argument if the URL doesn't use HTTPS *)
+let validate_api_base url =
+  if String.length url >= 8 && String.sub url 0 8 = "https://" then url
+  else invalid_arg "API base URL must use HTTPS"
+
+(** Maximum allowed error message length to prevent memory issues *)
+let max_error_body_length = 1000
+
+(** Truncate a string to maximum length, adding ellipsis if truncated *)
+let truncate_string ~max_len s =
+  if String.length s <= max_len then s
+  else String.sub s 0 (max_len - 3) ^ "..."
 
 (** Stripe List response (paginated) *)
 type 'a list_response = {
@@ -223,11 +294,11 @@ end
 (** Result type for API calls *)
 type 'a api_result = ('a, stripe_error) result
 
-(** Webhook signature verification error *)
+(** Webhook signature verification error.
+    Note: payload is intentionally NOT included to prevent sensitive data leakage in logs. *)
 type signature_verification_error = {
   message : string;
   sig_header : string;
-  payload : string;
 }
 
 exception Signature_verification_error of signature_verification_error
@@ -273,6 +344,9 @@ module Webhook_signature = struct
     in
     (timestamp, signatures)
 
+  (** Maximum number of signature items to parse (DoS protection) *)
+  let max_signature_items = 20
+
   (** Verify the webhook signature header *)
   let verify_header ~payload ~header ~secret ?(tolerance = default_tolerance) () =
     let timestamp, signatures = 
@@ -281,7 +355,6 @@ module Webhook_signature = struct
         raise (Signature_verification_error {
           message = "Unable to extract timestamp and signatures from header";
           sig_header = header;
-          payload;
         })
     in
     
@@ -291,7 +364,6 @@ module Webhook_signature = struct
         raise (Signature_verification_error {
           message = "Unable to extract timestamp and signatures from header";
           sig_header = header;
-          payload;
         })
     in
     
@@ -299,8 +371,14 @@ module Webhook_signature = struct
       raise (Signature_verification_error {
         message = Printf.sprintf "No signatures found with expected scheme %s" expected_scheme;
         sig_header = header;
-        payload;
       });
+    
+    (* Limit signatures to prevent DoS *)
+    let signatures = 
+      if List.length signatures > max_signature_items 
+      then List.filteri (fun i _ -> i < max_signature_items) signatures
+      else signatures
+    in
     
     let signed_payload = Printf.sprintf "%d.%s" timestamp payload in
     let expected_sig = compute_signature ~payload:signed_payload ~secret in
@@ -313,17 +391,20 @@ module Webhook_signature = struct
       raise (Signature_verification_error {
         message = "No signatures found matching the expected signature for payload";
         sig_header = header;
-        payload;
       });
     
-    (* Check timestamp tolerance if specified *)
+    (* Check timestamp tolerance if specified - both past AND future *)
     if tolerance > 0 then begin
       let now = int_of_float (Unix.gettimeofday ()) in
       if timestamp < now - tolerance then
         raise (Signature_verification_error {
-          message = Printf.sprintf "Timestamp outside the tolerance zone (%d)" timestamp;
+          message = Printf.sprintf "Timestamp outside the tolerance zone (too old: %d)" timestamp;
           sig_header = header;
-          payload;
+        });
+      if timestamp > now + tolerance then
+        raise (Signature_verification_error {
+          message = Printf.sprintf "Timestamp outside the tolerance zone (in future: %d)" timestamp;
+          sig_header = header;
         })
     end;
     

@@ -466,6 +466,68 @@ let test_collect_all_sync_error () =
   | Ok _ -> fail "Expected Error"
   | Error e -> check string "error message" "Test error" e.message
 
+(** Security validation tests *)
+
+(* Test: valid Stripe IDs are accepted *)
+let test_valid_stripe_id () =
+  check bool "customer id" true (Stripe_core.is_valid_stripe_id "cus_123abc");
+  check bool "payment intent" true (Stripe_core.is_valid_stripe_id "pi_1234567890");
+  check bool "charge id" true (Stripe_core.is_valid_stripe_id "ch_abc123XYZ");
+  check bool "account id" true (Stripe_core.is_valid_stripe_id "acct_123")
+
+(* Test: invalid Stripe IDs are rejected *)
+let test_invalid_stripe_id () =
+  check bool "empty" false (Stripe_core.is_valid_stripe_id "");
+  check bool "too short" false (Stripe_core.is_valid_stripe_id "ab");
+  check bool "no underscore" false (Stripe_core.is_valid_stripe_id "abc123");
+  check bool "path traversal" false (Stripe_core.is_valid_stripe_id "cus_../../../etc/passwd");
+  check bool "newline" false (Stripe_core.is_valid_stripe_id "cus_123\n456");
+  check bool "space" false (Stripe_core.is_valid_stripe_id "cus_123 456");
+  check bool "url encoded" false (Stripe_core.is_valid_stripe_id "cus_%2e%2e")
+
+(* Test: validate_id raises on invalid ID *)
+let test_validate_id_invalid () =
+  try
+    let _ = Stripe_core.validate_id ~resource_type:"test" "invalid" in
+    fail "Expected Invalid_argument"
+  with Invalid_argument msg ->
+    check bool "error message contains type" true (String.length msg > 0)
+
+(* Test: validate_id passes valid ID through *)
+let test_validate_id_valid () =
+  let id = Stripe_core.validate_id ~resource_type:"customer" "cus_123abc" in
+  check string "passes through" "cus_123abc" id
+
+(* Test: API base URL must be HTTPS *)
+let test_api_base_https_required () =
+  try
+    let _ = Stripe_core.validate_api_base "http://api.stripe.com" in
+    fail "Expected Invalid_argument for HTTP URL"
+  with Invalid_argument _ ->
+    check bool "rejected http" true true
+
+(* Test: HTTPS API base is accepted *)
+let test_api_base_https_accepted () =
+  let url = Stripe_core.validate_api_base "https://api.stripe.com" in
+  check string "accepted" "https://api.stripe.com" url
+
+(* Test: truncate_string works correctly *)
+let test_truncate_string () =
+  let short = "hello" in
+  let long = String.make 100 'x' in
+  check string "short unchanged" "hello" (Stripe_core.truncate_string ~max_len:10 short);
+  check int "long truncated" 10 (String.length (Stripe_core.truncate_string ~max_len:10 long));
+  check bool "has ellipsis" true 
+    (String.sub (Stripe_core.truncate_string ~max_len:10 long) 7 3 = "...")
+
+(* Test: idempotency key is cryptographically random (basic check) *)
+let test_idempotency_key_unique () =
+  let key1 = Stripe_core.generate_idempotency_key () in
+  let key2 = Stripe_core.generate_idempotency_key () in
+  check bool "keys are unique" true (key1 <> key2);
+  check bool "key1 is UUID format" true (String.length key1 = 36);
+  check bool "key2 is UUID format" true (String.length key2 = 36)
+
 (** Header construction tests - adapted from stripe-python *)
 
 (* Test: auth header uses Bearer token *)
@@ -574,5 +636,15 @@ let () =
       test_case "next_page_cursor_no_more" `Quick test_next_page_cursor_no_more;
       test_case "collect_all_sync" `Quick test_collect_all_sync;
       test_case "collect_all_sync_error" `Quick test_collect_all_sync_error;
+    ];
+    "security", [
+      test_case "valid_stripe_id" `Quick test_valid_stripe_id;
+      test_case "invalid_stripe_id" `Quick test_invalid_stripe_id;
+      test_case "validate_id_invalid" `Quick test_validate_id_invalid;
+      test_case "validate_id_valid" `Quick test_validate_id_valid;
+      test_case "api_base_https_required" `Quick test_api_base_https_required;
+      test_case "api_base_https_accepted" `Quick test_api_base_https_accepted;
+      test_case "truncate_string" `Quick test_truncate_string;
+      test_case "idempotency_key_unique" `Quick test_idempotency_key_unique;
     ];
   ]

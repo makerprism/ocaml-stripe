@@ -35,6 +35,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - GitHub Actions CI workflow for Ubuntu and macOS
 - GitHub Actions release workflow for tagged releases
 
+### Security
+
+- **Cryptographically secure idempotency keys**: Replaced `Random.int` (predictable PRNG) with `/dev/urandom` for secure random generation
+- **ID validation**: Added `is_valid_stripe_id` and `validate_id` functions to prevent path injection attacks; validates alphanumeric + underscore format
+- **Request timeout implementation**: Added `Request_timeout` exception with proper enforcement using `Lwt.pick` (timeout was previously configured but not enforced)
+- **HTTPS enforcement**: Added `validate_api_base` to reject non-HTTPS API base URLs
+- **Future timestamp rejection**: Webhook signature verification now rejects timestamps in the future (not just expired ones)
+- **DoS protection**: Limited webhook signature parsing to 20 items maximum
+- **Error message sanitization**: Removed raw payload from `Signature_verification_error` to prevent sensitive data leakage in logs
+- **Response truncation**: Limited error response bodies to 1000 characters to prevent memory issues with large error responses
+
 ### Notes
 
 - This SDK is experimental and not yet production-ready

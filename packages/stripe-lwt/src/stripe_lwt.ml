@@ -53,7 +53,10 @@ let sleep_time_for_retry ~retry_count ~initial_delay ~max_delay =
   (* Cap at max_delay *)
   Float.min delay max_delay
 
-(** Make a Stripe API request using Lwt with automatic retries *)
+(** Timeout exception *)
+exception Request_timeout
+
+(** Make a Stripe API request using Lwt with automatic retries and timeout *)
 let request
     ~(config : Stripe_core.config)
     ~(meth : Stripe_core.http_method)
@@ -62,6 +65,8 @@ let request
     ?(params : (string * string) list = [])
     ()
   : Stripe_core.http_response Lwt.t =
+  (* Validate API base URL uses HTTPS *)
+  let _ = Stripe_core.validate_api_base config.api_base in
   let url = config.api_base ^ path in
   let headers = Stripe_core.build_headers ~options config in
   let body = if List.length params > 0 then
@@ -72,10 +77,21 @@ let request
   let initial_delay = 0.5 in  (* Start with 500ms *)
   let max_delay = 8.0 in      (* Cap at 8 seconds *)
   
+  (* Create a request with timeout *)
+  let make_request () =
+    if config.timeout > 0.0 then
+      Lwt.pick [
+        Lwt_http_client.request ~meth ~url ~headers ?body ();
+        (Lwt_unix.sleep config.timeout >>= fun () -> Lwt.fail Request_timeout);
+      ]
+    else
+      Lwt_http_client.request ~meth ~url ~headers ?body ()
+  in
+  
   let rec attempt retry_count =
     Lwt.catch
       (fun () ->
-        Lwt_http_client.request ~meth ~url ~headers ?body () >>= fun response ->
+        make_request () >>= fun response ->
         (* Check if we should retry based on status code *)
         if is_retryable_status_code response.status_code 
            && retry_count < config.max_network_retries then
@@ -85,7 +101,7 @@ let request
         else
           Lwt.return response)
       (fun exn ->
-        (* Retry on network errors *)
+        (* Retry on network errors and timeouts *)
         if retry_count < config.max_network_retries then
           let sleep_time = sleep_time_for_retry ~retry_count ~initial_delay ~max_delay in
           Lwt_unix.sleep sleep_time >>= fun () ->
@@ -107,6 +123,14 @@ let post ~config ~path ?options ?params () =
 let delete ~config ~path ?options ?params () =
   request ~config ~meth:DELETE ~path ?options ?params ()
 
+(** Build a path with a validated resource ID.
+    @param base The base path (e.g., "/v1/customers/")
+    @param resource_type Description for error messages (e.g., "customer")
+    @param id The resource ID to validate and append *)
+let path_with_id ~base ~resource_type id =
+  let validated_id = Stripe_core.validate_id ~resource_type id in
+  base ^ validated_id
+
 (** Parse response and handle errors *)
 let handle_response ~parse_ok response =
   let open Stripe_core in
@@ -118,9 +142,11 @@ let handle_response ~parse_ok response =
     match parse_error json with
     | Some err -> Lwt.return_error err
     | None -> 
+      (* Truncate response body to prevent sensitive data leakage in logs *)
+      let truncated_body = truncate_string ~max_len:max_error_body_length response.body in
       Lwt.return_error {
         error_type = Api_error;
-        message = Printf.sprintf "HTTP %d: %s" response.status_code response.body;
+        message = Printf.sprintf "HTTP %d: %s" response.status_code truncated_body;
         code = None;
         param = None;
         decline_code = None;
@@ -296,7 +322,8 @@ module Client = struct
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
-      get ~config ~path:("/v1/customers/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/customers/" ~resource_type:"customer" id in
+      get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
     let update ~config ~id ?idempotency_key ?email ?name ?description ?phone ?metadata () =
@@ -311,11 +338,13 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~options ~path:("/v1/customers/" ^ id) ~params () >>=
+      let path = path_with_id ~base:"/v1/customers/" ~resource_type:"customer" id in
+      post ~config ~options ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
     let delete ~config ~id () =
-      delete ~config ~path:("/v1/customers/" ^ id) () >>=
+      let path = path_with_id ~base:"/v1/customers/" ~resource_type:"customer" id in
+      delete ~config ~path () >>=
       handle_response ~parse_ok:Stripe.Deleted.of_json
 
     let list ~config ?limit ?starting_after ?ending_before ?email () =
