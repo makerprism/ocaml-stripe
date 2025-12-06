@@ -469,4 +469,198 @@ module Client = struct
       get ~config ~path:"/v1/events" ~params () >>=
       handle_response ~parse_ok:(Stripe.List_response.of_json Stripe.Event.of_json)
   end
+
+  (** PaymentMethod API *)
+  module Payment_method = struct
+    open Stripe.Payment_method
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/payment_methods/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let attach ~config ~id ~customer () =
+      let params = [("customer", customer)] in
+      post ~config ~path:("/v1/payment_methods/" ^ id ^ "/attach") ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let detach ~config ~id () =
+      post ~config ~path:("/v1/payment_methods/" ^ id ^ "/detach") () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ~customer ?type_ ?limit ?starting_after () =
+      let params = [("customer", customer)] in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("type", v)) type_;
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+      ] in
+      get ~config ~path:"/v1/payment_methods" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
+
+  (** SetupIntent API *)
+  module Setup_intent = struct
+    open Stripe.Setup_intent
+
+    let create ~config ?idempotency_key ?customer ?payment_method 
+        ?payment_method_types ?usage ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("customer", v)) customer;
+        Option.map (fun v -> ("payment_method", v)) payment_method;
+        Option.map (fun v -> ("usage", v)) usage;
+      ] in
+      let params = match payment_method_types with
+        | Some types -> params @ List.mapi (fun i t -> 
+            (Printf.sprintf "payment_method_types[%d]" i, t)) types
+        | None -> params
+      in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/setup_intents" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/setup_intents/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let confirm ~config ~id ?payment_method () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("payment_method", v)) payment_method;
+      ] in
+      post ~config ~path:("/v1/setup_intents/" ^ id ^ "/confirm") ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let cancel ~config ~id () =
+      post ~config ~path:("/v1/setup_intents/" ^ id ^ "/cancel") () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ?limit ?starting_after ?customer ?payment_method () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("customer", v)) customer;
+        Option.map (fun v -> ("payment_method", v)) payment_method;
+      ] in
+      get ~config ~path:"/v1/setup_intents" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
+
+  (** Coupon API *)
+  module Coupon = struct
+    open Stripe.Coupon
+
+    let create ~config ?idempotency_key ?id ?percent_off ?amount_off 
+        ?currency ?duration ?duration_in_months ?max_redemptions ?name ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("id", v)) id;
+        Option.map (fun v -> ("percent_off", Printf.sprintf "%.2f" v)) percent_off;
+        Option.map (fun v -> ("amount_off", string_of_int v)) amount_off;
+        Option.map (fun v -> ("currency", v)) currency;
+        Option.map (fun v -> ("duration", v)) duration;
+        Option.map (fun v -> ("duration_in_months", string_of_int v)) duration_in_months;
+        Option.map (fun v -> ("max_redemptions", string_of_int v)) max_redemptions;
+        Option.map (fun v -> ("name", v)) name;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/coupons" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/coupons/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let update ~config ~id ?name ?metadata () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("name", v)) name;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~path:("/v1/coupons/" ^ id) ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let delete ~config ~id () =
+      delete ~config ~path:("/v1/coupons/" ^ id) () >>=
+      handle_response ~parse_ok:Stripe.Deleted.of_json
+
+    let list ~config ?limit ?starting_after () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+      ] in
+      get ~config ~path:"/v1/coupons" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
+
+  (** BalanceTransaction API *)
+  module Balance_transaction = struct
+    open Stripe.Balance_transaction
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/balance_transactions/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ?limit ?starting_after ?type_ ?source ?created_gte ?created_lte () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("type", v)) type_;
+        Option.map (fun v -> ("source", v)) source;
+        Option.map (fun v -> ("created[gte]", string_of_int v)) created_gte;
+        Option.map (fun v -> ("created[lte]", string_of_int v)) created_lte;
+      ] in
+      get ~config ~path:"/v1/balance_transactions" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
+
+  (** Payout API *)
+  module Payout = struct
+    open Stripe.Payout
+
+    let create ~config ~amount ~currency ?idempotency_key 
+        ?description ?destination ?method_ ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = [
+        ("amount", string_of_int amount);
+        ("currency", currency);
+      ] in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("description", v)) description;
+        Option.map (fun v -> ("destination", v)) destination;
+        Option.map (fun v -> ("method", v)) method_;
+      ] in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/payouts" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let retrieve ~config ~id () =
+      get ~config ~path:("/v1/payouts/" ^ id) () >>=
+      handle_response ~parse_ok:of_json
+
+    let cancel ~config ~id () =
+      post ~config ~path:("/v1/payouts/" ^ id ^ "/cancel") () >>=
+      handle_response ~parse_ok:of_json
+
+    let list ~config ?limit ?starting_after ?status ?created_gte ?created_lte () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("limit", string_of_int v)) limit;
+        Option.map (fun v -> ("starting_after", v)) starting_after;
+        Option.map (fun v -> ("status", v)) status;
+        Option.map (fun v -> ("created[gte]", string_of_int v)) created_gte;
+        Option.map (fun v -> ("created[lte]", string_of_int v)) created_lte;
+      ] in
+      get ~config ~path:"/v1/payouts" ~params () >>=
+      handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+  end
 end

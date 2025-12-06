@@ -200,6 +200,88 @@ let test_error_handling () =
     Lwt.return_unit
   end
 
+(** Test payment method retrieve *)
+let test_payment_method_retrieve () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Payment_method.retrieve ~config ~id:"pm_123" () in
+    match result with
+    | Ok pm ->
+      Alcotest.(check bool) "has id" true (String.length pm.id > 0);
+      Alcotest.(check string) "object" "payment_method" pm.object_;
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "PaymentMethod retrieve failed: %s" err.message)
+  end
+
+(** Test setup intent create *)
+let test_setup_intent_create () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Setup_intent.create ~config () in
+    match result with
+    | Ok si ->
+      Alcotest.(check bool) "has id" true (String.length si.id > 0);
+      Alcotest.(check string) "object" "setup_intent" si.object_;
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "SetupIntent create failed: %s" err.message)
+  end
+
+(** Test coupon create *)
+let test_coupon_create () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Coupon.create ~config
+      ~percent_off:25.0
+      ~duration:"once"
+      ()
+    in
+    match result with
+    | Ok coupon ->
+      Alcotest.(check bool) "has id" true (String.length coupon.id > 0);
+      Alcotest.(check string) "object" "coupon" coupon.object_;
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "Coupon create failed: %s" err.message)
+  end
+
+(** Test balance transaction list *)
+let test_balance_transaction_list () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Balance_transaction.list ~config ~limit:5 () in
+    match result with
+    | Ok list ->
+      Alcotest.(check bool) "has data" true (List.length list.data >= 0);
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "BalanceTransaction list failed: %s" err.message)
+  end
+
+(** Test payout list *)
+let test_payout_list () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Payout.list ~config ~limit:5 () in
+    match result with
+    | Ok list ->
+      Alcotest.(check bool) "has data" true (List.length list.data >= 0);
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "Payout list failed: %s" err.message)
+  end
+
 let lwt_test name f =
   Alcotest.test_case name `Quick (fun () -> Lwt_main.run (f ()))
 
@@ -230,5 +312,20 @@ let () =
     ];
     "error", [
       lwt_test "handling" test_error_handling;
+    ];
+    "payment_method", [
+      lwt_test "retrieve" test_payment_method_retrieve;
+    ];
+    "setup_intent", [
+      lwt_test "create" test_setup_intent_create;
+    ];
+    "coupon", [
+      lwt_test "create" test_coupon_create;
+    ];
+    "balance_transaction", [
+      lwt_test "list" test_balance_transaction_list;
+    ];
+    "payout", [
+      lwt_test "list" test_payout_list;
     ];
   ]
