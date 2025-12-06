@@ -90,20 +90,54 @@ let default_config ~api_key = {
   timeout = 30.0;
 }
 
+(** Request options for individual API calls *)
+type request_options = {
+  idempotency_key : string option;
+  stripe_account : string option;  (** For Connect: the connected account ID *)
+}
+
+let default_request_options = {
+  idempotency_key = None;
+  stripe_account = None;
+}
+
+(** Generate a random idempotency key (UUID v4 format) *)
+let generate_idempotency_key () =
+  let hex_chars = "0123456789abcdef" in
+  let random_hex n =
+    String.init n (fun _ -> hex_chars.[Random.int 16])
+  in
+  Printf.sprintf "%s-%s-%s-%s-%s"
+    (random_hex 8)
+    (random_hex 4)
+    (random_hex 4)
+    (random_hex 4)
+    (random_hex 12)
+
 (** Build authorization header *)
 let auth_header config =
   let credentials = Base64.encode_string config.api_key in
   ("Authorization", "Basic " ^ credentials ^ ":")
 
 (** Build common headers for Stripe API requests *)
-let build_headers config =
+let build_headers ?(options = default_request_options) config =
   let headers = [
     auth_header config;
     ("Content-Type", "application/x-www-form-urlencoded");
   ] in
-  match config.api_version with
-  | Some version -> ("Stripe-Version", version) :: headers
-  | None -> headers
+  let headers = match config.api_version with
+    | Some version -> ("Stripe-Version", version) :: headers
+    | None -> headers
+  in
+  let headers = match options.idempotency_key with
+    | Some key -> ("Idempotency-Key", key) :: headers
+    | None -> headers
+  in
+  let headers = match options.stripe_account with
+    | Some account -> ("Stripe-Account", account) :: headers
+    | None -> headers
+  in
+  headers
 
 (** URL-encode a form parameter *)
 let url_encode_param (key, value) =

@@ -27,16 +27,26 @@ module Lwt_http_client : Stripe_core.HTTP_CLIENT with type 'a io = 'a Lwt.t = st
     { Stripe_core.status_code; headers; body = body_str }
 end
 
+(** Re-export request options *)
+type request_options = Stripe_core.request_options = {
+  idempotency_key : string option;
+  stripe_account : string option;
+}
+
+let default_request_options = Stripe_core.default_request_options
+let generate_idempotency_key = Stripe_core.generate_idempotency_key
+
 (** Make a Stripe API request using Lwt *)
 let request
     ~(config : Stripe_core.config)
     ~(meth : Stripe_core.http_method)
     ~(path : string)
+    ?(options : request_options = default_request_options)
     ?(params : (string * string) list = [])
     ()
   : Stripe_core.http_response Lwt.t =
   let url = config.api_base ^ path in
-  let headers = Stripe_core.build_headers config in
+  let headers = Stripe_core.build_headers ~options config in
   let body = if List.length params > 0 then
     Some (Stripe_core.build_form_body params)
   else
@@ -45,16 +55,16 @@ let request
   Lwt_http_client.request ~meth ~url ~headers ?body ()
 
 (** Make a GET request *)
-let get ~config ~path ?params () =
-  request ~config ~meth:GET ~path ?params ()
+let get ~config ~path ?options ?params () =
+  request ~config ~meth:GET ~path ?options ?params ()
 
 (** Make a POST request *)
-let post ~config ~path ?params () =
-  request ~config ~meth:POST ~path ?params ()
+let post ~config ~path ?options ?params () =
+  request ~config ~meth:POST ~path ?options ?params ()
 
 (** Make a DELETE request *)
-let delete ~config ~path ?params () =
-  request ~config ~meth:DELETE ~path ?params ()
+let delete ~config ~path ?options ?params () =
+  request ~config ~meth:DELETE ~path ?options ?params ()
 
 (** Parse response and handle errors *)
 let handle_response ~parse_ok response =
@@ -86,7 +96,8 @@ module Client = struct
   module Customer = struct
     open Stripe.Customer
 
-    let create ~config ?email ?name ?description ?phone ?metadata () =
+    let create ~config ?idempotency_key ?email ?name ?description ?phone ?metadata () =
+      let options = { default_request_options with idempotency_key } in
       let params = List.filter_map Fun.id [
         Option.map (fun v -> ("email", v)) email;
         Option.map (fun v -> ("name", v)) name;
@@ -97,14 +108,15 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:"/v1/customers" ~params () >>= 
+      post ~config ~options ~path:"/v1/customers" ~params () >>= 
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
       get ~config ~path:("/v1/customers/" ^ id) () >>=
       handle_response ~parse_ok:of_json
 
-    let update ~config ~id ?email ?name ?description ?phone ?metadata () =
+    let update ~config ~id ?idempotency_key ?email ?name ?description ?phone ?metadata () =
+      let options = { default_request_options with idempotency_key } in
       let params = List.filter_map Fun.id [
         Option.map (fun v -> ("email", v)) email;
         Option.map (fun v -> ("name", v)) name;
@@ -115,7 +127,7 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:("/v1/customers/" ^ id) ~params () >>=
+      post ~config ~options ~path:("/v1/customers/" ^ id) ~params () >>=
       handle_response ~parse_ok:of_json
 
     let delete ~config ~id () =
@@ -138,8 +150,9 @@ module Client = struct
     open Stripe.Payment_intent
 
     let create ~config ~amount ~currency 
-        ?customer ?description ?payment_method ?confirm 
+        ?idempotency_key ?customer ?description ?payment_method ?confirm 
         ?capture_method ?metadata () =
+      let options = { default_request_options with idempotency_key } in
       let params = [
         ("amount", string_of_int amount);
         ("currency", currency);
@@ -155,7 +168,7 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:"/v1/payment_intents" ~params () >>=
+      post ~config ~options ~path:"/v1/payment_intents" ~params () >>=
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
@@ -234,7 +247,8 @@ module Client = struct
   module Refund = struct
     open Stripe.Refund
 
-    let create ~config ?charge ?payment_intent ?amount ?reason ?metadata () =
+    let create ~config ?idempotency_key ?charge ?payment_intent ?amount ?reason ?metadata () =
+      let options = { default_request_options with idempotency_key } in
       let params = List.filter_map Fun.id [
         Option.map (fun v -> ("charge", v)) charge;
         Option.map (fun v -> ("payment_intent", v)) payment_intent;
@@ -245,7 +259,7 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:"/v1/refunds" ~params () >>=
+      post ~config ~options ~path:"/v1/refunds" ~params () >>=
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
@@ -274,7 +288,8 @@ module Client = struct
   module Product = struct
     open Stripe.Product
 
-    let create ~config ~name ?description ?active ?metadata () =
+    let create ~config ?idempotency_key ~name ?description ?active ?metadata () =
+      let options = { default_request_options with idempotency_key } in
       let params = [("name", name)] in
       let params = params @ List.filter_map Fun.id [
         Option.map (fun v -> ("description", v)) description;
@@ -284,7 +299,7 @@ module Client = struct
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:"/v1/products" ~params () >>=
+      post ~config ~options ~path:"/v1/products" ~params () >>=
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =

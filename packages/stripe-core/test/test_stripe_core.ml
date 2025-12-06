@@ -204,6 +204,47 @@ let test_webhook_verify_signature () =
   in
   check bool "webhook verify" true result
 
+(* Test: idempotency key generation *)
+let test_generate_idempotency_key () =
+  let key1 = generate_idempotency_key () in
+  let key2 = generate_idempotency_key () in
+  (* Keys should be UUID-like format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx *)
+  check bool "key1 has correct length" true (String.length key1 = 36);
+  check bool "key2 has correct length" true (String.length key2 = 36);
+  check bool "keys are different" true (key1 <> key2);
+  (* Check format with dashes *)
+  check bool "key1 has dashes" true (String.get key1 8 = '-');
+  check bool "key1 has second dash" true (String.get key1 13 = '-')
+
+(* Test: build headers with idempotency key *)
+let test_build_headers_with_idempotency_key () =
+  let config = default_config ~api_key:"sk_test_123" in
+  let options = { default_request_options with idempotency_key = Some "test-key-123" } in
+  let headers = build_headers ~options config in
+  let has_idempotency_key = List.exists (fun (k, v) -> 
+    k = "Idempotency-Key" && v = "test-key-123"
+  ) headers in
+  check bool "has idempotency key header" true has_idempotency_key
+
+(* Test: build headers with stripe account *)
+let test_build_headers_with_stripe_account () =
+  let config = default_config ~api_key:"sk_test_123" in
+  let options = { default_request_options with stripe_account = Some "acct_123" } in
+  let headers = build_headers ~options config in
+  let has_stripe_account = List.exists (fun (k, v) -> 
+    k = "Stripe-Account" && v = "acct_123"
+  ) headers in
+  check bool "has stripe account header" true has_stripe_account
+
+(* Test: build headers without options *)
+let test_build_headers_without_options () =
+  let config = default_config ~api_key:"sk_test_123" in
+  let headers = build_headers config in
+  let has_idempotency_key = List.exists (fun (k, _) -> k = "Idempotency-Key") headers in
+  let has_stripe_account = List.exists (fun (k, _) -> k = "Stripe-Account") headers in
+  check bool "no idempotency key header" false has_idempotency_key;
+  check bool "no stripe account header" false has_stripe_account
+
 let () =
   run "Stripe Core" [
     "http_method", [
@@ -231,5 +272,11 @@ let () =
     ];
     "webhook", [
       test_case "verify_signature" `Quick test_webhook_verify_signature;
+    ];
+    "idempotency", [
+      test_case "generate_key" `Quick test_generate_idempotency_key;
+      test_case "build_headers_with_key" `Quick test_build_headers_with_idempotency_key;
+      test_case "build_headers_with_account" `Quick test_build_headers_with_stripe_account;
+      test_case "build_headers_without_options" `Quick test_build_headers_without_options;
     ];
   ]
