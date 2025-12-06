@@ -599,6 +599,14 @@ module Client = struct
   module Subscription = struct
     open Stripe.Subscription
 
+    (** Subscription item update for modifying subscription items.
+        Used with the update function to change prices, quantities, etc. *)
+    type item_update = {
+      id : string;           (** The subscription item ID (si_xxx) *)
+      price : string option; (** New price ID to switch to *)
+      quantity : int option; (** New quantity *)
+    }
+
     let create ~config ~customer ~price 
         ?default_payment_method ?metadata () =
       let params = [
@@ -620,16 +628,57 @@ module Client = struct
       get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
-    let update ~config ~id ?cancel_at_period_end ?default_payment_method ?metadata () =
+    (** Update a subscription.
+        @param id The subscription ID
+        @param items List of item updates for changing prices/quantities (for proration)
+        @param proration_behavior How to handle proration: "create_prorations", "none", or "always_invoice"
+        @param coupon Coupon ID to apply to the subscription (use empty string "" to remove)
+        @param cancel_at_period_end Whether to cancel at period end
+        @param default_payment_method Default payment method ID
+        @param metadata Key-value metadata *)
+    let update ~config ~id ?items ?proration_behavior ?coupon
+        ?cancel_at_period_end ?default_payment_method ?metadata () =
       let params = List.filter_map Fun.id [
         Option.map (fun v -> ("cancel_at_period_end", string_of_bool v)) cancel_at_period_end;
         Option.map (fun v -> ("default_payment_method", v)) default_payment_method;
+        Option.map (fun v -> ("proration_behavior", v)) proration_behavior;
+        Option.map (fun v -> ("coupon", v)) coupon;
       ] in
+      (* Add subscription items for proration updates *)
+      let params = match items with
+        | Some item_list ->
+          params @ List.concat (List.mapi (fun i item ->
+            let base = Printf.sprintf "items[%d]" i in
+            List.filter_map Fun.id [
+              Some (base ^ "[id]", item.id);
+              Option.map (fun p -> (base ^ "[price]", p)) item.price;
+              Option.map (fun q -> (base ^ "[quantity]", string_of_int q)) item.quantity;
+            ]
+          ) item_list)
+        | None -> params
+      in
       let params = match metadata with
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
       let path = path_with_id ~base:"/v1/subscriptions/" ~resource_type:"subscription" id in
+      post ~config ~path ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    (** Apply a coupon to an existing subscription.
+        @param id The subscription ID
+        @param coupon_id The coupon ID to apply *)
+    let apply_coupon ~config ~id ~coupon_id () =
+      let path = path_with_id ~base:"/v1/subscriptions/" ~resource_type:"subscription" id in
+      let params = [("coupon", coupon_id)] in
+      post ~config ~path ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    (** Remove a coupon from an existing subscription.
+        @param id The subscription ID *)
+    let remove_coupon ~config ~id () =
+      let path = path_with_id ~base:"/v1/subscriptions/" ~resource_type:"subscription" id in
+      let params = [("coupon", "")] in
       post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 

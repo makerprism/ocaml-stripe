@@ -19,6 +19,8 @@
   (dune (>= 3.0))
   yojson
   uri
+  ptime
+  base64
   digestif
   (alcotest :with-test)))
 
