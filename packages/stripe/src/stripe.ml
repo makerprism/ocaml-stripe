@@ -122,6 +122,392 @@ module Customer = struct
   let to_json t = t.raw
 end
 
+(** Tax ID resource - represents a customer's tax ID for invoicing *)
+module Tax_id = struct
+  (** Owner type for tax IDs - can be owned by customer, account, application, or self *)
+  type owner_type = Owner_customer | Owner_account | Owner_application | Owner_self
+
+  let owner_type_of_string = function
+    | "customer" -> Owner_customer
+    | "account" -> Owner_account
+    | "application" -> Owner_application
+    | "self" -> Owner_self
+    | _ -> Owner_customer
+
+  type owner = {
+    owner_type : owner_type;
+    customer : string option;  (** Customer ID when type is "customer" *)
+    account : string option;   (** Account ID when type is "account" *)
+  }
+
+  (** Tax ID types supported by Stripe.
+      See https://docs.stripe.com/billing/customer/tax-ids *)
+  type id_type =
+    (* Europe *)
+    | Ad_nrt         (** Andorran NRT number *)
+    | Al_tin         (** Albanian TIN *)
+    | Am_tin         (** Armenian TIN *)
+    | At_vat         (** Austrian VAT number *)
+    | Ba_tin         (** Bosnian TIN *)
+    | Be_vat         (** Belgian VAT number *)
+    | Bg_uic         (** Bulgarian UIC number *)
+    | Bg_vat         (** Bulgarian VAT number *)
+    | By_tin         (** Belarusian TIN *)
+    | Ch_uid         (** Swiss UID number *)
+    | Ch_vat         (** Swiss VAT number *)
+    | Cy_vat         (** Cypriot VAT number *)
+    | Cz_vat         (** Czech VAT number *)
+    | De_stn         (** German Tax Number (Steuernummer) *)
+    | De_vat         (** German VAT number *)
+    | Dk_vat         (** Danish VAT number *)
+    | Ee_vat         (** Estonian VAT number *)
+    | Es_cif         (** Spanish CIF number *)
+    | Es_vat         (** Spanish VAT number *)
+    | Eu_oss_vat     (** European One-Stop Shop VAT number *)
+    | Eu_vat         (** European VAT number (generic) *)
+    | Fi_vat         (** Finnish VAT number *)
+    | Fr_vat         (** French VAT number *)
+    | Gb_vat         (** UK VAT number *)
+    | Ge_vat         (** Georgian VAT number *)
+    | Gr_vat         (** Greek VAT number *)
+    | Hr_oib         (** Croatian OIB number *)
+    | Hr_vat         (** Croatian VAT number *)
+    | Hu_tin         (** Hungarian TIN number *)
+    | Hu_vat         (** Hungarian VAT number *)
+    | Ie_vat         (** Irish VAT number *)
+    | Is_vat         (** Icelandic VAT number *)
+    | It_vat         (** Italian VAT number *)
+    | Li_uid         (** Liechtenstein UID number *)
+    | Li_vat         (** Liechtenstein VAT number *)
+    | Lt_vat         (** Lithuanian VAT number *)
+    | Lu_vat         (** Luxembourg VAT number *)
+    | Lv_vat         (** Latvian VAT number *)
+    | Md_vat         (** Moldovan VAT number *)
+    | Me_pib         (** Montenegrin PIB number *)
+    | Mk_vat         (** North Macedonian VAT number *)
+    | Mt_vat         (** Maltese VAT number *)
+    | Nl_vat         (** Dutch VAT number *)
+    | No_vat         (** Norwegian VAT number *)
+    | No_voec        (** Norwegian VOEC number *)
+    | Pl_vat         (** Polish VAT number *)
+    | Pt_vat         (** Portuguese VAT number *)
+    | Ro_tin         (** Romanian TIN number *)
+    | Ro_vat         (** Romanian VAT number *)
+    | Rs_pib         (** Serbian PIB number *)
+    | Ru_inn         (** Russian INN number *)
+    | Ru_kpp         (** Russian KPP number *)
+    | Se_vat         (** Swedish VAT number *)
+    | Si_tin         (** Slovenian TIN number *)
+    | Si_vat         (** Slovenian VAT number *)
+    | Sk_vat         (** Slovak VAT number *)
+    | Sm_coe         (** San Marino COE number *)
+    | Tr_tin         (** Turkish TIN number *)
+    | Ua_vat         (** Ukrainian VAT number *)
+    | Xi_vat         (** UK VAT for Northern Ireland *)
+    (* Americas *)
+    | Ar_cuit        (** Argentinian CUIT *)
+    | Bo_tin         (** Bolivian TIN *)
+    | Br_cnpj        (** Brazilian CNPJ number *)
+    | Br_cpf         (** Brazilian CPF number *)
+    | Ca_bn          (** Canadian Business Number *)
+    | Ca_gst_hst     (** Canadian GST/HST Number *)
+    | Ca_pst_bc      (** Canadian PST (British Columbia) *)
+    | Ca_pst_mb      (** Canadian PST (Manitoba) *)
+    | Ca_pst_sk      (** Canadian PST (Saskatchewan) *)
+    | Ca_qst         (** Canadian QST (Quebec) *)
+    | Cl_tin         (** Chilean TIN *)
+    | Co_nit         (** Colombian NIT *)
+    | Cr_tin         (** Costa Rican TIN *)
+    | Do_rcn         (** Dominican Republic RCN *)
+    | Ec_ruc         (** Ecuadorian RUC *)
+    | Gt_nit         (** Guatemalan NIT *)
+    | Hn_tin         (** Honduran TIN *)
+    | Mx_rfc         (** Mexican RFC *)
+    | Ni_ruc         (** Nicaraguan RUC *)
+    | Pa_ruc         (** Panamanian RUC *)
+    | Pe_ruc         (** Peruvian RUC *)
+    | Py_ruc         (** Paraguayan RUC *)
+    | Sv_nit         (** Salvadoran NIT *)
+    | Us_ein         (** US Employer Identification Number *)
+    | Uy_ruc         (** Uruguayan RUC *)
+    | Ve_rif         (** Venezuelan RIF *)
+    (* Asia Pacific *)
+    | Au_abn         (** Australian Business Number *)
+    | Au_arn         (** Australian Registered Body Number *)
+    | Bd_bin         (** Bangladeshi BIN *)
+    | Cn_tin         (** Chinese TIN *)
+    | Hk_br          (** Hong Kong BR number *)
+    | Id_npwp        (** Indonesian NPWP *)
+    | In_gst         (** Indian GST number *)
+    | Jp_cn          (** Japanese Corporate Number *)
+    | Jp_rn          (** Japanese Registered Number *)
+    | Jp_trn         (** Japanese Tax Registration Number *)
+    | Kh_tin         (** Cambodian TIN *)
+    | Kr_brn         (** Korean BRN *)
+    | Kz_bin         (** Kazakhstani BIN *)
+    | La_tin         (** Laotian TIN *)
+    | Lk_svat        (** Sri Lankan SVAT *)
+    | Mm_tin         (** Myanmar TIN *)
+    | Mn_tin         (** Mongolian TIN *)
+    | My_frp         (** Malaysian FRP *)
+    | My_itn         (** Malaysian ITN *)
+    | My_sst         (** Malaysian SST *)
+    | Np_pan         (** Nepalese PAN *)
+    | Nz_gst         (** New Zealand GST number *)
+    | Ph_tin         (** Philippines TIN *)
+    | Pk_ntn         (** Pakistani NTN *)
+    | Sg_gst         (** Singapore GST *)
+    | Sg_uen         (** Singapore UEN *)
+    | Th_vat         (** Thai VAT *)
+    | Tw_vat         (** Taiwanese VAT *)
+    | Uz_tin         (** Uzbekistani TIN *)
+    | Uz_vat         (** Uzbekistani VAT *)
+    | Vn_tin         (** Vietnamese TIN *)
+    (* Middle East & Africa *)
+    | Ae_trn         (** UAE TRN *)
+    | Ao_tin         (** Angolan TIN *)
+    | Bh_vat         (** Bahraini VAT *)
+    | Dz_vat         (** Algerian VAT *)
+    | Eg_tin         (** Egyptian TIN *)
+    | Et_tin         (** Ethiopian TIN *)
+    | Gh_tin         (** Ghanaian TIN *)
+    | Il_vat         (** Israeli VAT *)
+    | Jo_tin         (** Jordanian TIN *)
+    | Ke_pin         (** Kenyan PIN *)
+    | Kw_vat         (** Kuwaiti VAT *)
+    | Ma_vat         (** Moroccan VAT *)
+    | Ng_tin         (** Nigerian TIN *)
+    | Om_vat         (** Omani VAT *)
+    | Qa_vat         (** Qatari VAT *)
+    | Sa_vat         (** Saudi Arabia VAT *)
+    | Sn_ninea       (** Senegalese NINEA *)
+    | Tn_vat         (** Tunisian VAT *)
+    | Tz_vat         (** Tanzanian VAT *)
+    | Ug_tin         (** Ugandan TIN *)
+    | Za_vat         (** South African VAT *)
+    | Zm_tin         (** Zambian TIN *)
+    | Zw_tin         (** Zimbabwean TIN *)
+    (* Caribbean & Other *)
+    | Aw_tin         (** Aruban TIN *)
+    | Az_tin         (** Azerbaijani TIN *)
+    | Bb_tin         (** Barbadian TIN *)
+    | Bf_ifu         (** Burkinabe IFU *)
+    | Bj_ifu         (** Beninese IFU *)
+    | Bs_tin         (** Bahamian TIN *)
+    | Cd_nif         (** Congolese NIF *)
+    | Cm_niu         (** Cameroonian NIU *)
+    | Cv_nif         (** Cape Verdean NIF *)
+    | Gn_nif         (** Guinean NIF *)
+    | Kg_tin         (** Kyrgyzstani TIN *)
+    | Mr_nif         (** Mauritanian NIF *)
+    | Sr_fin         (** Surinamese FIN *)
+    | Tj_tin         (** Tajikistani TIN *)
+    (* Other *)
+    | Other of string (** Fallback for unknown types *)
+
+  let id_type_of_string = function
+    (* Europe *)
+    | "ad_nrt" -> Ad_nrt | "al_tin" -> Al_tin | "am_tin" -> Am_tin
+    | "at_vat" -> At_vat | "ba_tin" -> Ba_tin | "be_vat" -> Be_vat
+    | "bg_uic" -> Bg_uic | "bg_vat" -> Bg_vat | "by_tin" -> By_tin
+    | "ch_uid" -> Ch_uid | "ch_vat" -> Ch_vat | "cy_vat" -> Cy_vat
+    | "cz_vat" -> Cz_vat | "de_stn" -> De_stn | "de_vat" -> De_vat
+    | "dk_vat" -> Dk_vat | "ee_vat" -> Ee_vat | "es_cif" -> Es_cif
+    | "es_vat" -> Es_vat | "eu_oss_vat" -> Eu_oss_vat | "eu_vat" -> Eu_vat
+    | "fi_vat" -> Fi_vat | "fr_vat" -> Fr_vat | "gb_vat" -> Gb_vat
+    | "ge_vat" -> Ge_vat | "gr_vat" -> Gr_vat | "hr_oib" -> Hr_oib
+    | "hr_vat" -> Hr_vat | "hu_tin" -> Hu_tin | "hu_vat" -> Hu_vat
+    | "ie_vat" -> Ie_vat | "is_vat" -> Is_vat | "it_vat" -> It_vat
+    | "li_uid" -> Li_uid | "li_vat" -> Li_vat | "lt_vat" -> Lt_vat
+    | "lu_vat" -> Lu_vat | "lv_vat" -> Lv_vat | "md_vat" -> Md_vat
+    | "me_pib" -> Me_pib | "mk_vat" -> Mk_vat | "mt_vat" -> Mt_vat
+    | "nl_vat" -> Nl_vat | "no_vat" -> No_vat | "no_voec" -> No_voec
+    | "pl_vat" -> Pl_vat | "pt_vat" -> Pt_vat | "ro_tin" -> Ro_tin
+    | "ro_vat" -> Ro_vat | "rs_pib" -> Rs_pib | "ru_inn" -> Ru_inn
+    | "ru_kpp" -> Ru_kpp | "se_vat" -> Se_vat | "si_tin" -> Si_tin
+    | "si_vat" -> Si_vat | "sk_vat" -> Sk_vat | "sm_coe" -> Sm_coe
+    | "tr_tin" -> Tr_tin | "ua_vat" -> Ua_vat | "xi_vat" -> Xi_vat
+    (* Americas *)
+    | "ar_cuit" -> Ar_cuit | "bo_tin" -> Bo_tin | "br_cnpj" -> Br_cnpj
+    | "br_cpf" -> Br_cpf | "ca_bn" -> Ca_bn | "ca_gst_hst" -> Ca_gst_hst
+    | "ca_pst_bc" -> Ca_pst_bc | "ca_pst_mb" -> Ca_pst_mb
+    | "ca_pst_sk" -> Ca_pst_sk | "ca_qst" -> Ca_qst | "cl_tin" -> Cl_tin
+    | "co_nit" -> Co_nit | "cr_tin" -> Cr_tin | "do_rcn" -> Do_rcn
+    | "ec_ruc" -> Ec_ruc | "gt_nit" -> Gt_nit | "hn_tin" -> Hn_tin
+    | "mx_rfc" -> Mx_rfc | "ni_ruc" -> Ni_ruc | "pa_ruc" -> Pa_ruc
+    | "pe_ruc" -> Pe_ruc | "py_ruc" -> Py_ruc | "sv_nit" -> Sv_nit
+    | "us_ein" -> Us_ein | "uy_ruc" -> Uy_ruc | "ve_rif" -> Ve_rif
+    (* Asia Pacific *)
+    | "au_abn" -> Au_abn | "au_arn" -> Au_arn | "bd_bin" -> Bd_bin
+    | "cn_tin" -> Cn_tin | "hk_br" -> Hk_br | "id_npwp" -> Id_npwp
+    | "in_gst" -> In_gst | "jp_cn" -> Jp_cn | "jp_rn" -> Jp_rn
+    | "jp_trn" -> Jp_trn | "kh_tin" -> Kh_tin | "kr_brn" -> Kr_brn
+    | "kz_bin" -> Kz_bin | "la_tin" -> La_tin | "lk_svat" -> Lk_svat
+    | "mm_tin" -> Mm_tin | "mn_tin" -> Mn_tin | "my_frp" -> My_frp
+    | "my_itn" -> My_itn | "my_sst" -> My_sst | "np_pan" -> Np_pan
+    | "nz_gst" -> Nz_gst | "ph_tin" -> Ph_tin | "pk_ntn" -> Pk_ntn
+    | "sg_gst" -> Sg_gst | "sg_uen" -> Sg_uen | "th_vat" -> Th_vat
+    | "tw_vat" -> Tw_vat | "uz_tin" -> Uz_tin | "uz_vat" -> Uz_vat
+    | "vn_tin" -> Vn_tin
+    (* Middle East & Africa *)
+    | "ae_trn" -> Ae_trn | "ao_tin" -> Ao_tin | "bh_vat" -> Bh_vat
+    | "dz_vat" -> Dz_vat | "eg_tin" -> Eg_tin | "et_tin" -> Et_tin
+    | "gh_tin" -> Gh_tin | "il_vat" -> Il_vat | "jo_tin" -> Jo_tin
+    | "ke_pin" -> Ke_pin | "kw_vat" -> Kw_vat | "ma_vat" -> Ma_vat
+    | "ng_tin" -> Ng_tin | "om_vat" -> Om_vat | "qa_vat" -> Qa_vat
+    | "sa_vat" -> Sa_vat | "sn_ninea" -> Sn_ninea | "tn_vat" -> Tn_vat
+    | "tz_vat" -> Tz_vat | "ug_tin" -> Ug_tin | "za_vat" -> Za_vat
+    | "zm_tin" -> Zm_tin | "zw_tin" -> Zw_tin
+    (* Caribbean & Other *)
+    | "aw_tin" -> Aw_tin | "az_tin" -> Az_tin | "bb_tin" -> Bb_tin
+    | "bf_ifu" -> Bf_ifu | "bj_ifu" -> Bj_ifu | "bs_tin" -> Bs_tin
+    | "cd_nif" -> Cd_nif | "cm_niu" -> Cm_niu | "cv_nif" -> Cv_nif
+    | "gn_nif" -> Gn_nif | "kg_tin" -> Kg_tin | "mr_nif" -> Mr_nif
+    | "sr_fin" -> Sr_fin | "tj_tin" -> Tj_tin
+    | s -> Other s
+
+  let id_type_to_string = function
+    (* Europe *)
+    | Ad_nrt -> "ad_nrt" | Al_tin -> "al_tin" | Am_tin -> "am_tin"
+    | At_vat -> "at_vat" | Ba_tin -> "ba_tin" | Be_vat -> "be_vat"
+    | Bg_uic -> "bg_uic" | Bg_vat -> "bg_vat" | By_tin -> "by_tin"
+    | Ch_uid -> "ch_uid" | Ch_vat -> "ch_vat" | Cy_vat -> "cy_vat"
+    | Cz_vat -> "cz_vat" | De_stn -> "de_stn" | De_vat -> "de_vat"
+    | Dk_vat -> "dk_vat" | Ee_vat -> "ee_vat" | Es_cif -> "es_cif"
+    | Es_vat -> "es_vat" | Eu_oss_vat -> "eu_oss_vat" | Eu_vat -> "eu_vat"
+    | Fi_vat -> "fi_vat" | Fr_vat -> "fr_vat" | Gb_vat -> "gb_vat"
+    | Ge_vat -> "ge_vat" | Gr_vat -> "gr_vat" | Hr_oib -> "hr_oib"
+    | Hr_vat -> "hr_vat" | Hu_tin -> "hu_tin" | Hu_vat -> "hu_vat"
+    | Ie_vat -> "ie_vat" | Is_vat -> "is_vat" | It_vat -> "it_vat"
+    | Li_uid -> "li_uid" | Li_vat -> "li_vat" | Lt_vat -> "lt_vat"
+    | Lu_vat -> "lu_vat" | Lv_vat -> "lv_vat" | Md_vat -> "md_vat"
+    | Me_pib -> "me_pib" | Mk_vat -> "mk_vat" | Mt_vat -> "mt_vat"
+    | Nl_vat -> "nl_vat" | No_vat -> "no_vat" | No_voec -> "no_voec"
+    | Pl_vat -> "pl_vat" | Pt_vat -> "pt_vat" | Ro_tin -> "ro_tin"
+    | Ro_vat -> "ro_vat" | Rs_pib -> "rs_pib" | Ru_inn -> "ru_inn"
+    | Ru_kpp -> "ru_kpp" | Se_vat -> "se_vat" | Si_tin -> "si_tin"
+    | Si_vat -> "si_vat" | Sk_vat -> "sk_vat" | Sm_coe -> "sm_coe"
+    | Tr_tin -> "tr_tin" | Ua_vat -> "ua_vat" | Xi_vat -> "xi_vat"
+    (* Americas *)
+    | Ar_cuit -> "ar_cuit" | Bo_tin -> "bo_tin" | Br_cnpj -> "br_cnpj"
+    | Br_cpf -> "br_cpf" | Ca_bn -> "ca_bn" | Ca_gst_hst -> "ca_gst_hst"
+    | Ca_pst_bc -> "ca_pst_bc" | Ca_pst_mb -> "ca_pst_mb"
+    | Ca_pst_sk -> "ca_pst_sk" | Ca_qst -> "ca_qst" | Cl_tin -> "cl_tin"
+    | Co_nit -> "co_nit" | Cr_tin -> "cr_tin" | Do_rcn -> "do_rcn"
+    | Ec_ruc -> "ec_ruc" | Gt_nit -> "gt_nit" | Hn_tin -> "hn_tin"
+    | Mx_rfc -> "mx_rfc" | Ni_ruc -> "ni_ruc" | Pa_ruc -> "pa_ruc"
+    | Pe_ruc -> "pe_ruc" | Py_ruc -> "py_ruc" | Sv_nit -> "sv_nit"
+    | Us_ein -> "us_ein" | Uy_ruc -> "uy_ruc" | Ve_rif -> "ve_rif"
+    (* Asia Pacific *)
+    | Au_abn -> "au_abn" | Au_arn -> "au_arn" | Bd_bin -> "bd_bin"
+    | Cn_tin -> "cn_tin" | Hk_br -> "hk_br" | Id_npwp -> "id_npwp"
+    | In_gst -> "in_gst" | Jp_cn -> "jp_cn" | Jp_rn -> "jp_rn"
+    | Jp_trn -> "jp_trn" | Kh_tin -> "kh_tin" | Kr_brn -> "kr_brn"
+    | Kz_bin -> "kz_bin" | La_tin -> "la_tin" | Lk_svat -> "lk_svat"
+    | Mm_tin -> "mm_tin" | Mn_tin -> "mn_tin" | My_frp -> "my_frp"
+    | My_itn -> "my_itn" | My_sst -> "my_sst" | Np_pan -> "np_pan"
+    | Nz_gst -> "nz_gst" | Ph_tin -> "ph_tin" | Pk_ntn -> "pk_ntn"
+    | Sg_gst -> "sg_gst" | Sg_uen -> "sg_uen" | Th_vat -> "th_vat"
+    | Tw_vat -> "tw_vat" | Uz_tin -> "uz_tin" | Uz_vat -> "uz_vat"
+    | Vn_tin -> "vn_tin"
+    (* Middle East & Africa *)
+    | Ae_trn -> "ae_trn" | Ao_tin -> "ao_tin" | Bh_vat -> "bh_vat"
+    | Dz_vat -> "dz_vat" | Eg_tin -> "eg_tin" | Et_tin -> "et_tin"
+    | Gh_tin -> "gh_tin" | Il_vat -> "il_vat" | Jo_tin -> "jo_tin"
+    | Ke_pin -> "ke_pin" | Kw_vat -> "kw_vat" | Ma_vat -> "ma_vat"
+    | Ng_tin -> "ng_tin" | Om_vat -> "om_vat" | Qa_vat -> "qa_vat"
+    | Sa_vat -> "sa_vat" | Sn_ninea -> "sn_ninea" | Tn_vat -> "tn_vat"
+    | Tz_vat -> "tz_vat" | Ug_tin -> "ug_tin" | Za_vat -> "za_vat"
+    | Zm_tin -> "zm_tin" | Zw_tin -> "zw_tin"
+    (* Caribbean & Other *)
+    | Aw_tin -> "aw_tin" | Az_tin -> "az_tin" | Bb_tin -> "bb_tin"
+    | Bf_ifu -> "bf_ifu" | Bj_ifu -> "bj_ifu" | Bs_tin -> "bs_tin"
+    | Cd_nif -> "cd_nif" | Cm_niu -> "cm_niu" | Cv_nif -> "cv_nif"
+    | Gn_nif -> "gn_nif" | Kg_tin -> "kg_tin" | Mr_nif -> "mr_nif"
+    | Sr_fin -> "sr_fin" | Tj_tin -> "tj_tin"
+    | Other s -> s
+
+  (** Verification status for a tax ID *)
+  type verification_status =
+    | Pending
+    | Verified
+    | Unverified
+    | Unavailable
+
+  let verification_status_of_string = function
+    | "pending" -> Pending
+    | "verified" -> Verified
+    | "unverified" -> Unverified
+    | "unavailable" -> Unavailable
+    | _ -> Unavailable
+
+  type verification = {
+    status : verification_status;
+    verified_name : string option;
+    verified_address : string option;
+  }
+
+  type t = {
+    id : string;
+    object_ : string;
+    country : string option;
+    created : int;
+    customer : string option;
+    livemode : bool;
+    owner : owner option;  (** Owner of the tax ID (Connect only) *)
+    type_ : id_type;
+    value : string;
+    verification : verification option;
+    raw : Yojson.Safe.t;
+  }
+
+  let owner_of_json json =
+    let open Yojson.Safe.Util in
+    {
+      owner_type = json |> member "type" |> to_string |> owner_type_of_string;
+      customer = json |> member "customer" |> to_string_option;
+      account = json |> member "account" |> to_string_option;
+    }
+
+  let verification_of_json json =
+    let open Yojson.Safe.Util in
+    {
+      status = json |> member "status" |> to_string |> verification_status_of_string;
+      verified_name = json |> member "verified_name" |> to_string_option;
+      verified_address = json |> member "verified_address" |> to_string_option;
+    }
+
+  let of_json json =
+    let open Yojson.Safe.Util in
+    {
+      id = json |> member "id" |> to_string;
+      object_ = json |> member "object" |> to_string;
+      country = json |> member "country" |> to_string_option;
+      created = json |> member "created" |> to_int;
+      customer = json |> member "customer" |> to_string_option;
+      livemode = json |> member "livemode" |> to_bool;
+      owner = (
+        let o = json |> member "owner" in
+        if o = `Null then None else Some (owner_of_json o)
+      );
+      type_ = json |> member "type" |> to_string |> id_type_of_string;
+      value = json |> member "value" |> to_string;
+      verification = (
+        let v = json |> member "verification" in
+        if v = `Null then None else Some (verification_of_json v)
+      );
+      raw = json;
+    }
+
+  let to_json t = t.raw
+
+  (** Check if the tax ID is verified *)
+  let is_verified t =
+    match t.verification with
+    | Some v -> v.status = Verified
+    | None -> false
+end
+
 (** Charge resource *)
 module Charge = struct
   type status = Succeeded | Pending | Failed
@@ -377,35 +763,101 @@ module Subscription = struct
     | "paused" -> Paused
     | _ -> Active
 
+  (** Collection method for subscription *)
+  type collection_method = Charge_automatically | Send_invoice
+
+  let collection_method_of_string = function
+    | "charge_automatically" -> Charge_automatically
+    | "send_invoice" -> Send_invoice
+    | _ -> Charge_automatically
+
   type t = {
     id : string;
     object_ : string;
+    (* Billing *)
+    billing_cycle_anchor : int option;
+    cancel_at : int option;
     cancel_at_period_end : bool;
+    canceled_at : int option;
+    collection_method : collection_method option;
+    created : int;
+    currency : string option;
     current_period_end : int;
     current_period_start : int;
     customer : string;
+    days_until_due : int option;
+    (* Payment *)
     default_payment_method : string option;
+    default_source : string option;
+    (* Description *)
+    description : string option;
+    (* Dates *)
+    ended_at : int option;
+    (* Invoice *)
+    latest_invoice : string option;
+    (* Mode *)
     livemode : bool;
+    (* Metadata *)
+    metadata : (string * string) list;
+    (* Status *)
     status : status;
+    start_date : int option;
+    (* Trial *)
+    trial_end : int option;
+    trial_start : int option;
+    (* Raw JSON for additional fields *)
     raw : Yojson.Safe.t;
   }
 
   let of_json json =
     let open Yojson.Safe.Util in
+    let parse_metadata json =
+      match json |> member "metadata" with
+      | `Assoc pairs -> List.map (fun (k, v) -> (k, to_string v)) pairs
+      | _ -> []
+    in
     {
       id = json |> member "id" |> to_string;
       object_ = json |> member "object" |> to_string;
+      billing_cycle_anchor = json |> member "billing_cycle_anchor" |> to_int_option;
+      cancel_at = json |> member "cancel_at" |> to_int_option;
       cancel_at_period_end = json |> member "cancel_at_period_end" |> to_bool;
+      canceled_at = json |> member "canceled_at" |> to_int_option;
+      collection_method = json |> member "collection_method" |> to_string_option 
+                          |> Option.map collection_method_of_string;
+      created = json |> member "created" |> to_int_option |> Option.value ~default:0;
+      currency = json |> member "currency" |> to_string_option;
       current_period_end = json |> member "current_period_end" |> to_int;
       current_period_start = json |> member "current_period_start" |> to_int;
       customer = json |> member "customer" |> to_string;
+      days_until_due = json |> member "days_until_due" |> to_int_option;
       default_payment_method = json |> member "default_payment_method" |> to_string_option;
+      default_source = json |> member "default_source" |> to_string_option;
+      description = json |> member "description" |> to_string_option;
+      ended_at = json |> member "ended_at" |> to_int_option;
+      latest_invoice = json |> member "latest_invoice" |> to_string_option;
       livemode = json |> member "livemode" |> to_bool;
+      metadata = parse_metadata json;
       status = json |> member "status" |> to_string |> status_of_string;
+      start_date = json |> member "start_date" |> to_int_option;
+      trial_end = json |> member "trial_end" |> to_int_option;
+      trial_start = json |> member "trial_start" |> to_int_option;
       raw = json;
     }
 
   let to_json t = t.raw
+
+  (** Check if subscription is in trial *)
+  let is_trialing t = t.status = Trialing
+
+  (** Check if subscription is active or trialing *)
+  let is_active t = t.status = Active || t.status = Trialing
+
+  (** Check if subscription has been canceled *)
+  let is_canceled t = t.status = Canceled
+
+  (** Check if subscription will cancel at period end *)
+  let will_cancel t = t.cancel_at_period_end || Option.is_some t.cancel_at
 end
 
 (** Product resource *)

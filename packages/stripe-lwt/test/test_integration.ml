@@ -282,6 +282,249 @@ let test_payout_list () =
       Alcotest.fail (Printf.sprintf "Payout list failed: %s" err.message)
   end
 
+(** Test invoice create *)
+let test_invoice_create () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Invoice.create ~config
+      ~customer:"cus_123"
+      ~description:"Test invoice"
+      ~auto_advance:false
+      ~collection_method:Stripe_lwt.Client.Send_invoice
+      ~days_until_due:30
+      ()
+    in
+    match result with
+    | Ok invoice ->
+      Alcotest.(check bool) "has id" true (String.length invoice.id > 0);
+      Alcotest.(check string) "object" "invoice" invoice.object_;
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "Invoice create failed: %s" err.message)
+  end
+
+(** Test invoice retrieve *)
+let test_invoice_retrieve () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Invoice.retrieve ~config ~id:"in_123" () in
+    match result with
+    | Ok invoice ->
+      Alcotest.(check bool) "has id" true (String.length invoice.id > 0);
+      Alcotest.(check string) "object" "invoice" invoice.object_;
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "Invoice retrieve failed: %s" err.message)
+  end
+
+(** Test invoice list *)
+let test_invoice_list () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Invoice.list ~config ~limit:5 () in
+    match result with
+    | Ok list ->
+      Alcotest.(check bool) "has data" true (List.length list.data >= 0);
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "Invoice list failed: %s" err.message)
+  end
+
+(** Test invoice finalize *)
+let test_invoice_finalize () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Invoice.finalize_invoice ~config ~id:"in_123" () in
+    match result with
+    | Ok invoice ->
+      Alcotest.(check bool) "has id" true (String.length invoice.id > 0);
+      Alcotest.(check string) "object" "invoice" invoice.object_;
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "Invoice finalize failed: %s" err.message)
+  end
+
+(** Test invoice pay *)
+let test_invoice_pay () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Invoice.pay ~config ~id:"in_123" () in
+    match result with
+    | Ok invoice ->
+      Alcotest.(check bool) "has id" true (String.length invoice.id > 0);
+      Alcotest.(check string) "object" "invoice" invoice.object_;
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "Invoice pay failed: %s" err.message)
+  end
+
+(** Test invoice upcoming (preview) *)
+let test_invoice_upcoming () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Invoice.upcoming ~config ~customer:"cus_123" () in
+    match result with
+    | Ok invoice ->
+      (* upcoming invoices don't have an id yet *)
+      Alcotest.(check string) "object" "invoice" invoice.object_;
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "Invoice upcoming failed: %s" err.message)
+  end
+
+(** Test tax_id create *)
+let test_tax_id_create () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Customer.Tax_id.create ~config
+      ~customer:"cus_123"
+      ~type_:"eu_vat"
+      ~value:"DE123456789"
+      ()
+    in
+    match result with
+    | Ok tax_id ->
+      Alcotest.(check bool) "has id" true (String.length tax_id.id > 0);
+      Alcotest.(check string) "object" "tax_id" tax_id.object_;
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "Tax_id create failed: %s" err.message)
+  end
+
+(** Test tax_id retrieve *)
+let test_tax_id_retrieve () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Customer.Tax_id.retrieve ~config
+      ~customer:"cus_123"
+      ~id:"txi_123"
+      ()
+    in
+    match result with
+    | Ok tax_id ->
+      Alcotest.(check bool) "has id" true (String.length tax_id.id > 0);
+      Alcotest.(check string) "object" "tax_id" tax_id.object_;
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "Tax_id retrieve failed: %s" err.message)
+  end
+
+(** Test tax_id list *)
+let test_tax_id_list () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Customer.Tax_id.list ~config
+      ~customer:"cus_123"
+      ~limit:5
+      ()
+    in
+    match result with
+    | Ok list ->
+      Alcotest.(check bool) "has data" true (List.length list.data >= 0);
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "Tax_id list failed: %s" err.message)
+  end
+
+(** Test tax_id delete *)
+let test_tax_id_delete () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Customer.Tax_id.delete ~config
+      ~customer:"cus_123"
+      ~id:"txi_123"
+      ()
+    in
+    match result with
+    | Ok deleted ->
+      Alcotest.(check bool) "deleted" true deleted.deleted;
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "Tax_id delete failed: %s" err.message)
+  end
+
+(** Test subscription create with trial *)
+let test_subscription_create_with_trial () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Subscription.create ~config
+      ~customer:"cus_123"
+      ~price:"price_123"
+      ~trial_period_days:14
+      ()
+    in
+    match result with
+    | Ok sub ->
+      Alcotest.(check bool) "has id" true (String.length sub.id > 0);
+      Alcotest.(check string) "object" "subscription" sub.object_;
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "Subscription create with trial failed: %s" err.message)
+  end
+
+(** Test subscription create with automatic_tax *)
+let test_subscription_create_with_automatic_tax () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Subscription.create ~config
+      ~customer:"cus_123"
+      ~price:"price_123"
+      ~automatic_tax:true
+      ()
+    in
+    match result with
+    | Ok sub ->
+      Alcotest.(check bool) "has id" true (String.length sub.id > 0);
+      Alcotest.(check string) "object" "subscription" sub.object_;
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "Subscription create with automatic_tax failed: %s" err.message)
+  end
+
+(** Test subscription update with trial_end *)
+let test_subscription_update_trial_end () =
+  if not (is_stripe_mock_available ()) then
+    Lwt.return_unit
+  else begin
+    let config = mock_config () in
+    let* result = Stripe_lwt.Client.Subscription.update ~config
+      ~id:"sub_123"
+      ~trial_end:Stripe_lwt.Client.Subscription.Trial_end_now
+      ()
+    in
+    match result with
+    | Ok sub ->
+      Alcotest.(check bool) "has id" true (String.length sub.id > 0);
+      Alcotest.(check string) "object" "subscription" sub.object_;
+      Lwt.return_unit
+    | Error err ->
+      Alcotest.fail (Printf.sprintf "Subscription update trial_end failed: %s" err.message)
+  end
+
 let lwt_test name f =
   Alcotest.test_case name `Quick (fun () -> Lwt_main.run (f ()))
 
@@ -327,5 +570,24 @@ let () =
     ];
     "payout", [
       lwt_test "list" test_payout_list;
+    ];
+    "invoice", [
+      lwt_test "create" test_invoice_create;
+      lwt_test "retrieve" test_invoice_retrieve;
+      lwt_test "list" test_invoice_list;
+      lwt_test "finalize" test_invoice_finalize;
+      lwt_test "pay" test_invoice_pay;
+      lwt_test "upcoming" test_invoice_upcoming;
+    ];
+    "tax_id", [
+      lwt_test "create" test_tax_id_create;
+      lwt_test "retrieve" test_tax_id_retrieve;
+      lwt_test "list" test_tax_id_list;
+      lwt_test "delete" test_tax_id_delete;
+    ];
+    "subscription_trial", [
+      lwt_test "create_with_trial" test_subscription_create_with_trial;
+      lwt_test "create_with_automatic_tax" test_subscription_create_with_automatic_tax;
+      lwt_test "update_trial_end" test_subscription_update_trial_end;
     ];
   ]

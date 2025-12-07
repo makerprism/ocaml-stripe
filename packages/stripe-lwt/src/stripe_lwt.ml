@@ -302,6 +302,15 @@ module Client = struct
 
   let create = Stripe_core.default_config
 
+  (** Collection method for invoices - shared across Subscription and Invoice modules *)
+  type collection_method =
+    | Charge_automatically  (** Automatically charge the customer *)
+    | Send_invoice          (** Email an invoice to the customer *)
+
+  let collection_method_to_string = function
+    | Charge_automatically -> "charge_automatically"
+    | Send_invoice -> "send_invoice"
+
   (** Customer API *)
   module Customer = struct
     open Stripe.Customer
@@ -356,6 +365,54 @@ module Client = struct
       ] in
       get ~config ~path:"/v1/customers" ~params () >>=
       handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+
+    (** Tax ID API - nested under customers *)
+    module Tax_id = struct
+      open Stripe.Tax_id
+
+      (** Create a tax ID for a customer.
+          @param customer The customer ID
+          @param type_ The type of tax ID (e.g., "eu_vat", "gb_vat", "us_ein")
+          @param value The value of the tax ID *)
+      let create ~config ~customer ~type_ ~value () =
+        let customer_id = Stripe_core.validate_id ~resource_type:"customer" customer in
+        let params = [
+          ("type", type_);
+          ("value", value);
+        ] in
+        post ~config ~path:("/v1/customers/" ^ customer_id ^ "/tax_ids") ~params () >>=
+        handle_response ~parse_ok:of_json
+
+      (** Retrieve a tax ID.
+          @param customer The customer ID
+          @param id The tax ID (txi_xxx) *)
+      let retrieve ~config ~customer ~id () =
+        let customer_id = Stripe_core.validate_id ~resource_type:"customer" customer in
+        let tax_id = Stripe_core.validate_id ~resource_type:"tax_id" id in
+        get ~config ~path:("/v1/customers/" ^ customer_id ^ "/tax_ids/" ^ tax_id) () >>=
+        handle_response ~parse_ok:of_json
+
+      (** Delete a tax ID.
+          @param customer The customer ID
+          @param id The tax ID (txi_xxx) *)
+      let delete ~config ~customer ~id () =
+        let customer_id = Stripe_core.validate_id ~resource_type:"customer" customer in
+        let tax_id = Stripe_core.validate_id ~resource_type:"tax_id" id in
+        let path = "/v1/customers/" ^ customer_id ^ "/tax_ids/" ^ tax_id in
+        request ~config ~meth:DELETE ~path () >>=
+        handle_response ~parse_ok:Stripe.Deleted.of_json
+
+      (** List all tax IDs for a customer.
+          @param customer The customer ID *)
+      let list ~config ~customer ?limit ?starting_after () =
+        let customer_id = Stripe_core.validate_id ~resource_type:"customer" customer in
+        let params = List.filter_map Fun.id [
+          Option.map (fun v -> ("limit", string_of_int v)) limit;
+          Option.map (fun v -> ("starting_after", v)) starting_after;
+        ] in
+        get ~config ~path:("/v1/customers/" ^ customer_id ^ "/tax_ids") ~params () >>=
+        handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
+    end
   end
 
   (** PaymentIntent API *)
@@ -607,20 +664,288 @@ module Client = struct
       quantity : int option; (** New quantity *)
     }
 
-    let create ~config ~customer ~price 
-        ?default_payment_method ?metadata () =
+    (** Create an item_update for modifying an existing subscription item *)
+    let item_update ~id ?price ?quantity () = { id; price; quantity }
+
+    (** Subscription item for creating subscriptions with multiple items *)
+    type item_create = {
+      price : string;                            (** Price ID for the item *)
+      quantity : int option;                     (** Quantity for the item *)
+      tax_rates : string list option;            (** Tax rates for this item *)
+      metadata : (string * string) list option;  (** Metadata for this item *)
+    }
+
+    (** Create a subscription item with just a price *)
+    let item ~price ?quantity ?tax_rates ?metadata () =
+      { price; quantity; tax_rates; metadata }
+
+    (** Trial end specification for subscriptions.
+        Use this type-safe variant instead of raw strings. *)
+    type trial_end =
+      | Trial_end_at of int   (** End trial at specific Unix timestamp *)
+      | Trial_end_now         (** End trial immediately *)
+
+    (** Convert trial_end to API string parameter *)
+    let trial_end_to_string = function
+      | Trial_end_at ts -> string_of_int ts
+      | Trial_end_now -> "now"
+
+    (** Billing cycle anchor specification *)
+    type billing_cycle_anchor =
+      | Billing_cycle_at of int   (** Set anchor to specific Unix timestamp *)
+      | Billing_cycle_now         (** Set anchor to now *)
+      | Billing_cycle_unchanged   (** Keep current anchor (for updates) *)
+
+    let billing_cycle_anchor_to_string = function
+      | Billing_cycle_at ts -> string_of_int ts
+      | Billing_cycle_now -> "now"
+      | Billing_cycle_unchanged -> "unchanged"
+
+    (** Cancel at specification *)
+    type cancel_at =
+      | Cancel_at_timestamp of int  (** Cancel at specific Unix timestamp *)
+      | Cancel_at_period_end        (** Cancel at end of current period *)
+
+    let cancel_at_to_string = function
+      | Cancel_at_timestamp ts -> string_of_int ts
+      | Cancel_at_period_end -> "period_end"
+
+    (** Payment behavior when creating/updating subscriptions *)
+    type payment_behavior =
+      | Allow_incomplete       (** Allow incomplete payments *)
+      | Default_incomplete     (** Use Stripe's default behavior for incomplete *)
+      | Error_if_incomplete    (** Return an error if payment fails *)
+      | Pending_if_incomplete  (** Mark as pending if payment fails *)
+
+    let payment_behavior_to_string = function
+      | Allow_incomplete -> "allow_incomplete"
+      | Default_incomplete -> "default_incomplete"
+      | Error_if_incomplete -> "error_if_incomplete"
+      | Pending_if_incomplete -> "pending_if_incomplete"
+
+    (** Proration behavior when changing subscriptions *)
+    type proration_behavior =
+      | Create_prorations  (** Create prorations for changes *)
+      | No_proration       (** Don't prorate *)
+      | Always_invoice     (** Always create an invoice for prorations *)
+
+    let proration_behavior_to_string = function
+      | Create_prorations -> "create_prorations"
+      | No_proration -> "none"
+      | Always_invoice -> "always_invoice"
+
+    (** Trial end behavior when payment method is missing *)
+    type trial_end_behavior =
+      | Trial_cancel          (** Cancel the subscription *)
+      | Trial_create_invoice  (** Create an invoice *)
+      | Trial_pause           (** Pause the subscription *)
+
+    let trial_end_behavior_to_string = function
+      | Trial_cancel -> "cancel"
+      | Trial_create_invoice -> "create_invoice"
+      | Trial_pause -> "pause"
+
+    (** Trial settings configuration *)
+    type trial_settings = {
+      end_behavior_missing_payment_method : trial_end_behavior;
+    }
+
+    (** Create trial settings *)
+    let make_trial_settings ~end_behavior () =
+      { end_behavior_missing_payment_method = end_behavior }
+
+    (** Pause collection behavior *)
+    type pause_behavior =
+      | Pause_keep_as_draft       (** Keep invoices as drafts *)
+      | Pause_mark_uncollectible  (** Mark invoices as uncollectible *)
+      | Pause_void                (** Void invoices *)
+
+    let pause_behavior_to_string = function
+      | Pause_keep_as_draft -> "keep_as_draft"
+      | Pause_mark_uncollectible -> "mark_uncollectible"
+      | Pause_void -> "void"
+
+    (** Single discount to apply to a subscription. *)
+    type discount =
+      | Coupon of string          (** Apply a coupon by ID *)
+      | Promotion_code of string  (** Apply a promotion code by ID *)
+
+    (** Discounts parameter for create/update operations.
+        Use [Set] to apply discounts, [Clear] to remove all. *)
+    type discounts_param =
+      | Set of discount list  (** Apply these discounts *)
+      | Clear                 (** Remove all discounts *)
+
+    (** Create a subscription.
+        @param customer The customer ID
+        @param price The price ID for the subscription
+        @param idempotency_key Idempotency key for safe retries
+        @param default_payment_method Default payment method ID
+        @param trial_end When the trial ends (use Trial_end_at or Trial_end_now)
+        @param trial_period_days Number of days for the trial period
+        @param trial_from_plan Use the plan's trial period settings
+        @param trial_settings Settings for trial behavior
+        @param cancel_at_period_end Whether to cancel at period end
+        @param cancel_at When to cancel the subscription
+        @param billing_cycle_anchor When to anchor billing cycles
+        @param coupon Coupon ID to apply (use discounts for multiple)
+        @param promotion_code Promotion code ID to apply (use discounts for multiple)
+        @param discounts Discounts to apply: [Set [...]] to set, [Clear] to remove all
+        @param automatic_tax Enable automatic tax calculation
+        @param collection_method How to collect payment
+        @param days_until_due Days until due (for Send_invoice collection)
+        @param description Subscription description
+        @param payment_behavior How to handle payment failures
+        @param proration_behavior How to handle proration
+        @param metadata Key-value metadata *)
+    let create ~config ~customer ~price ?idempotency_key
+        ?default_payment_method ?trial_end ?trial_period_days ?trial_from_plan
+        ?trial_settings ?cancel_at_period_end ?cancel_at ?billing_cycle_anchor
+        ?coupon ?promotion_code ?discounts ?automatic_tax ?collection_method 
+        ?days_until_due ?description ?payment_behavior ?proration_behavior 
+        ?metadata () =
+      let options = { default_request_options with idempotency_key } in
       let params = [
         ("customer", customer);
         ("items[0][price]", price);
       ] in
       let params = params @ List.filter_map Fun.id [
         Option.map (fun v -> ("default_payment_method", v)) default_payment_method;
+        Option.map (fun v -> ("trial_end", trial_end_to_string v)) trial_end;
+        Option.map (fun v -> ("trial_period_days", string_of_int v)) trial_period_days;
+        Option.map (fun v -> ("trial_from_plan", string_of_bool v)) trial_from_plan;
+        Option.map (fun v -> ("cancel_at_period_end", string_of_bool v)) cancel_at_period_end;
+        Option.map (fun v -> ("cancel_at", cancel_at_to_string v)) cancel_at;
+        Option.map (fun v -> ("billing_cycle_anchor", billing_cycle_anchor_to_string v)) billing_cycle_anchor;
+        Option.map (fun v -> ("coupon", v)) coupon;
+        Option.map (fun v -> ("promotion_code", v)) promotion_code;
+        Option.map (fun v -> ("automatic_tax[enabled]", string_of_bool v)) automatic_tax;
+        Option.map (fun v -> ("collection_method", collection_method_to_string v)) collection_method;
+        Option.map (fun v -> ("days_until_due", string_of_int v)) days_until_due;
+        Option.map (fun v -> ("description", v)) description;
+        Option.map (fun v -> ("payment_behavior", payment_behavior_to_string v)) payment_behavior;
+        Option.map (fun v -> ("proration_behavior", proration_behavior_to_string v)) proration_behavior;
       ] in
+      (* Add discounts as array or clear *)
+      let params = match discounts with
+        | Some (Set ds) ->
+          params @ List.mapi (fun i d ->
+            match d with
+            | Coupon c -> (Printf.sprintf "discounts[%d][coupon]" i, c)
+            | Promotion_code p -> (Printf.sprintf "discounts[%d][promotion_code]" i, p)
+          ) ds
+        | Some Clear -> params @ [("discounts", "")]
+        | None -> params
+      in
+      (* Add trial_settings *)
+      let params = match trial_settings with
+        | Some ts ->
+          params @ [("trial_settings[end_behavior][missing_payment_method]", 
+                     trial_end_behavior_to_string ts.end_behavior_missing_payment_method)]
+        | None -> params
+      in
       let params = match metadata with
         | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
         | None -> params
       in
-      post ~config ~path:"/v1/subscriptions" ~params () >>=
+      post ~config ~options ~path:"/v1/subscriptions" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    (** Create a subscription with multiple items.
+        @param customer The customer ID
+        @param items List of subscription items with prices and quantities
+        @param idempotency_key Idempotency key for safe retries
+        @param default_payment_method Default payment method ID
+        @param trial_end When the trial ends
+        @param trial_period_days Number of days for the trial period
+        @param trial_from_plan Use the plan's trial period settings
+        @param trial_settings Settings for trial behavior
+        @param cancel_at_period_end Whether to cancel at period end
+        @param cancel_at When to cancel the subscription
+        @param billing_cycle_anchor When to anchor billing cycles
+        @param coupon Coupon ID to apply (use discounts for multiple)
+        @param promotion_code Promotion code ID to apply (use discounts for multiple)
+        @param discounts Discounts to apply: [Set [...]] to set, [Clear] to remove all
+        @param automatic_tax Enable automatic tax calculation
+        @param collection_method How to collect payment
+        @param days_until_due Days until due (for Send_invoice collection)
+        @param description Subscription description
+        @param default_tax_rates Default tax rate IDs
+        @param payment_behavior How to handle payment failures
+        @param proration_behavior How to handle proration
+        @param metadata Key-value metadata *)
+    let create_multi ~config ~customer ~items ?idempotency_key
+        ?default_payment_method ?trial_end ?trial_period_days ?trial_from_plan
+        ?trial_settings ?cancel_at_period_end ?cancel_at ?billing_cycle_anchor
+        ?coupon ?promotion_code ?discounts ?automatic_tax ?collection_method 
+        ?days_until_due ?description ?default_tax_rates ?payment_behavior 
+        ?proration_behavior ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = [("customer", customer)] in
+      (* Add items as array *)
+      let params = params @ List.concat (List.mapi (fun i (item : item_create) ->
+        let base = Printf.sprintf "items[%d]" i in
+        [(base ^ "[price]", item.price)] @
+        (match item.quantity with
+         | Some q -> [(base ^ "[quantity]", string_of_int q)]
+         | None -> []) @
+        (match item.tax_rates with
+         | Some rates -> List.mapi (fun j r -> 
+             (Printf.sprintf "%s[tax_rates][%d]" base j, r)) rates
+         | None -> []) @
+        (match item.metadata with
+         | Some m -> List.map (fun (k, v) -> 
+             (Printf.sprintf "%s[metadata][%s]" base k, v)) m
+         | None -> [])
+      ) items) in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("default_payment_method", v)) default_payment_method;
+        Option.map (fun v -> ("trial_end", trial_end_to_string v)) trial_end;
+        Option.map (fun v -> ("trial_period_days", string_of_int v)) trial_period_days;
+        Option.map (fun v -> ("trial_from_plan", string_of_bool v)) trial_from_plan;
+        Option.map (fun v -> ("cancel_at_period_end", string_of_bool v)) cancel_at_period_end;
+        Option.map (fun v -> ("cancel_at", cancel_at_to_string v)) cancel_at;
+        Option.map (fun v -> ("billing_cycle_anchor", billing_cycle_anchor_to_string v)) billing_cycle_anchor;
+        Option.map (fun v -> ("coupon", v)) coupon;
+        Option.map (fun v -> ("promotion_code", v)) promotion_code;
+        Option.map (fun v -> ("automatic_tax[enabled]", string_of_bool v)) automatic_tax;
+        Option.map (fun v -> ("collection_method", collection_method_to_string v)) collection_method;
+        Option.map (fun v -> ("days_until_due", string_of_int v)) days_until_due;
+        Option.map (fun v -> ("description", v)) description;
+        Option.map (fun v -> ("payment_behavior", payment_behavior_to_string v)) payment_behavior;
+        Option.map (fun v -> ("proration_behavior", proration_behavior_to_string v)) proration_behavior;
+      ] in
+      (* Add discounts as array or clear *)
+      let params = match discounts with
+        | Some (Set ds) ->
+          params @ List.mapi (fun i d ->
+            match d with
+            | Coupon c -> (Printf.sprintf "discounts[%d][coupon]" i, c)
+            | Promotion_code p -> (Printf.sprintf "discounts[%d][promotion_code]" i, p)
+          ) ds
+        | Some Clear -> params @ [("discounts", "")]
+        | None -> params
+      in
+      (* Add default_tax_rates as array *)
+      let params = match default_tax_rates with
+        | Some rates ->
+          params @ List.mapi (fun i r ->
+            (Printf.sprintf "default_tax_rates[%d]" i, r)
+          ) rates
+        | None -> params
+      in
+      (* Add trial_settings *)
+      let params = match trial_settings with
+        | Some ts ->
+          params @ [("trial_settings[end_behavior][missing_payment_method]", 
+                     trial_end_behavior_to_string ts.end_behavior_missing_payment_method)]
+        | None -> params
+      in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/subscriptions" ~params () >>=
       handle_response ~parse_ok:of_json
 
     let retrieve ~config ~id () =
@@ -628,22 +953,87 @@ module Client = struct
       get ~config ~path () >>=
       handle_response ~parse_ok:of_json
 
+    (** Pause collection configuration *)
+    type pause_collection = {
+      behavior : pause_behavior;
+      resumes_at : int option;  (** Unix timestamp when to resume collection *)
+    }
+
+    (** Create pause_collection config *)
+    let pause_collection_config ~behavior ?resumes_at () =
+      { behavior; resumes_at }
+
     (** Update a subscription.
         @param id The subscription ID
         @param items List of item updates for changing prices/quantities (for proration)
-        @param proration_behavior How to handle proration: "create_prorations", "none", or "always_invoice"
+        @param proration_behavior How to handle proration
         @param coupon Coupon ID to apply to the subscription (use empty string "" to remove)
+        @param promotion_code Promotion code ID to apply
+        @param discounts Discounts to apply: [Set [...]] to set, [Clear] to remove all
         @param cancel_at_period_end Whether to cancel at period end
+        @param cancel_at When to cancel the subscription
         @param default_payment_method Default payment method ID
+        @param trial_end When the trial ends (use Trial_end_at or Trial_end_now)
+        @param trial_settings Settings for trial behavior
+        @param billing_cycle_anchor When to anchor billing cycles
+        @param pause_collection Pause collection settings
+        @param automatic_tax Enable automatic tax calculation
+        @param collection_method How to collect payment
+        @param days_until_due Days until due (for Send_invoice collection)
+        @param description Subscription description
+        @param payment_behavior How to handle payment failures
+        @param off_session Whether customer is off-session
+        @param proration_date Unix timestamp for proration calculation
         @param metadata Key-value metadata *)
-    let update ~config ~id ?items ?proration_behavior ?coupon
-        ?cancel_at_period_end ?default_payment_method ?metadata () =
+    let update ~config ~id ?items ?proration_behavior ?coupon ?promotion_code
+        ?discounts ?cancel_at_period_end ?cancel_at ?default_payment_method ?trial_end
+        ?trial_settings ?billing_cycle_anchor ?pause_collection ?automatic_tax
+        ?collection_method ?days_until_due ?description ?payment_behavior
+        ?off_session ?proration_date ?metadata () =
       let params = List.filter_map Fun.id [
         Option.map (fun v -> ("cancel_at_period_end", string_of_bool v)) cancel_at_period_end;
+        Option.map (fun v -> ("cancel_at", cancel_at_to_string v)) cancel_at;
         Option.map (fun v -> ("default_payment_method", v)) default_payment_method;
-        Option.map (fun v -> ("proration_behavior", v)) proration_behavior;
+        Option.map (fun v -> ("proration_behavior", proration_behavior_to_string v)) proration_behavior;
         Option.map (fun v -> ("coupon", v)) coupon;
+        Option.map (fun v -> ("promotion_code", v)) promotion_code;
+        Option.map (fun v -> ("trial_end", trial_end_to_string v)) trial_end;
+        Option.map (fun v -> ("billing_cycle_anchor", billing_cycle_anchor_to_string v)) billing_cycle_anchor;
+        Option.map (fun v -> ("automatic_tax[enabled]", string_of_bool v)) automatic_tax;
+        Option.map (fun v -> ("collection_method", collection_method_to_string v)) collection_method;
+        Option.map (fun v -> ("days_until_due", string_of_int v)) days_until_due;
+        Option.map (fun v -> ("description", v)) description;
+        Option.map (fun v -> ("payment_behavior", payment_behavior_to_string v)) payment_behavior;
+        Option.map (fun v -> ("off_session", string_of_bool v)) off_session;
+        Option.map (fun v -> ("proration_date", string_of_int v)) proration_date;
       ] in
+      (* Add trial_settings *)
+      let params = match trial_settings with
+        | Some ts ->
+          params @ [("trial_settings[end_behavior][missing_payment_method]", 
+                     trial_end_behavior_to_string ts.end_behavior_missing_payment_method)]
+        | None -> params
+      in
+      (* Add pause_collection *)
+      let params = match pause_collection with
+        | Some pc ->
+          params @ [("pause_collection[behavior]", pause_behavior_to_string pc.behavior)] @
+          (match pc.resumes_at with
+           | Some ts -> [("pause_collection[resumes_at]", string_of_int ts)]
+           | None -> [])
+        | None -> params
+      in
+      (* Add discounts as array or clear *)
+      let params = match discounts with
+        | Some (Set ds) ->
+          params @ List.mapi (fun i d ->
+            match d with
+            | Coupon c -> (Printf.sprintf "discounts[%d][coupon]" i, c)
+            | Promotion_code p -> (Printf.sprintf "discounts[%d][promotion_code]" i, p)
+          ) ds
+        | Some Clear -> params @ [("discounts", "")]
+        | None -> params
+      in
       (* Add subscription items for proration updates *)
       let params = match items with
         | Some item_list ->
@@ -682,10 +1072,77 @@ module Client = struct
       post ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
 
-    let cancel ~config ~id () =
+    (** Cancellation feedback options *)
+    type cancellation_feedback =
+      | Feedback_customer_service
+      | Feedback_low_quality
+      | Feedback_missing_features
+      | Feedback_other
+      | Feedback_switched_service
+      | Feedback_too_complex
+      | Feedback_too_expensive
+      | Feedback_unused
+
+    let cancellation_feedback_to_string = function
+      | Feedback_customer_service -> "customer_service"
+      | Feedback_low_quality -> "low_quality"
+      | Feedback_missing_features -> "missing_features"
+      | Feedback_other -> "other"
+      | Feedback_switched_service -> "switched_service"
+      | Feedback_too_complex -> "too_complex"
+      | Feedback_too_expensive -> "too_expensive"
+      | Feedback_unused -> "unused"
+
+    (** Cancellation details *)
+    type cancellation_details = {
+      comment : string option;
+      feedback : cancellation_feedback option;
+    }
+
+    (** Cancel a subscription.
+        @param id The subscription ID
+        @param invoice_now Generate a final invoice immediately
+        @param prorate Create a prorated credit for unused time
+        @param cancellation_details Details about why the subscription was cancelled *)
+    let cancel ~config ~id ?invoice_now ?prorate ?cancellation_details () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("invoice_now", string_of_bool v)) invoice_now;
+        Option.map (fun v -> ("prorate", string_of_bool v)) prorate;
+      ] in
+      let params = match cancellation_details with
+        | Some cd ->
+          params @
+          (match cd.comment with
+           | Some c -> [("cancellation_details[comment]", c)]
+           | None -> []) @
+          (match cd.feedback with
+           | Some f -> [("cancellation_details[feedback]", cancellation_feedback_to_string f)]
+           | None -> [])
+        | None -> params
+      in
       let path = path_with_id ~base:"/v1/subscriptions/" ~resource_type:"subscription" id in
-      delete ~config ~path () >>=
+      delete ~config ~path ~params () >>=
       handle_response ~parse_ok:of_json
+
+    (** Resume a paused subscription.
+        @param id The subscription ID
+        @param billing_cycle_anchor When to anchor the next billing cycle ("now" or "unchanged")
+        @param proration_behavior How to handle proration *)
+    let resume ~config ~id ?billing_cycle_anchor ?proration_behavior () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("billing_cycle_anchor", billing_cycle_anchor_to_string v)) billing_cycle_anchor;
+        Option.map (fun v -> ("proration_behavior", v)) proration_behavior;
+      ] in
+      let path = path_with_id ~base:"/v1/subscriptions/" ~resource_type:"subscription" id in
+      post ~config ~path:(path ^ "/resume") ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    (** Delete the discount on a subscription.
+        @param id The subscription ID *)
+    let delete_discount ~config ~id () =
+      let path = path_with_id ~base:"/v1/subscriptions/" ~resource_type:"subscription" id in
+      delete ~config ~path:(path ^ "/discount") () >>=
+      handle_response ~parse_ok:Stripe.Deleted.of_json
 
     let list ~config ?limit ?starting_after ?customer ?status () =
       let params = List.filter_map Fun.id [
@@ -718,9 +1175,23 @@ module Client = struct
       get ~config ~path:"/v1/invoices" ~params () >>=
       handle_response ~parse_ok:(Stripe.List_response.of_json of_json)
 
-    let pay ~config ~id ?payment_method () =
+    (** Pay an invoice.
+        @param id The invoice ID
+        @param payment_method PaymentMethod ID to use for payment
+        @param forgive Forgive the difference if source has insufficient funds
+        @param off_session Whether customer is off-session (default true)
+        @param paid_out_of_band Mark as paid outside of Stripe
+        @param mandate Mandate ID to use for payment
+        @param source Payment source ID to use *)
+    let pay ~config ~id ?payment_method ?forgive ?off_session ?paid_out_of_band
+        ?mandate ?source () =
       let params = List.filter_map Fun.id [
         Option.map (fun v -> ("payment_method", v)) payment_method;
+        Option.map (fun v -> ("forgive", string_of_bool v)) forgive;
+        Option.map (fun v -> ("off_session", string_of_bool v)) off_session;
+        Option.map (fun v -> ("paid_out_of_band", string_of_bool v)) paid_out_of_band;
+        Option.map (fun v -> ("mandate", v)) mandate;
+        Option.map (fun v -> ("source", v)) source;
       ] in
       let path = path_with_id ~base:"/v1/invoices/" ~resource_type:"invoice" id in
       post ~config ~path:(path ^ "/pay") ~params () >>=
@@ -729,6 +1200,559 @@ module Client = struct
     let void ~config ~id () =
       let path = path_with_id ~base:"/v1/invoices/" ~resource_type:"invoice" id in
       post ~config ~path:(path ^ "/void") () >>=
+      handle_response ~parse_ok:of_json
+
+    (** Delete a draft invoice. Only works for invoices in draft state.
+        @param id The invoice ID *)
+    let delete ~config ~id () =
+      let path = path_with_id ~base:"/v1/invoices/" ~resource_type:"invoice" id in
+      request ~config ~meth:DELETE ~path () >>=
+      handle_response ~parse_ok:Stripe.Deleted.of_json
+
+    (** Custom field for invoice display *)
+    type custom_field = {
+      name : string;
+      value : string;
+    }
+
+    (** Automatic tax configuration *)
+    type automatic_tax_config = {
+      enabled : bool;
+      liability_type : string option;  (** "account" or "self" *)
+      liability_account : string option;  (** Connected account ID when liability_type is "account" *)
+    }
+
+    (** Create automatic_tax config with just enabled flag *)
+    let automatic_tax_enabled enabled =
+      { enabled; liability_type = None; liability_account = None }
+
+    (** Create automatic_tax config for Connect with liability *)
+    let automatic_tax_with_liability ~enabled ~liability_type ?liability_account () =
+      { enabled; liability_type = Some liability_type; liability_account }
+
+    (** Rendering options for invoice PDF *)
+    type rendering_options = {
+      amount_tax_display : string option;  (** "exclude_tax" or "include_inclusive_tax" *)
+      pdf_page_size : string option;  (** "a4", "letter", or "auto" *)
+    }
+
+    (** Shipping cost for invoice *)
+    type shipping_cost = {
+      shipping_rate : string option;  (** ID of an existing ShippingRate *)
+      shipping_rate_data_display_name : string option;  (** Name for inline rate *)
+      shipping_rate_data_type : string option;  (** "fixed_amount" *)
+      shipping_rate_data_fixed_amount : int option;  (** Amount in cents *)
+      shipping_rate_data_fixed_currency : string option;  (** Currency code *)
+    }
+
+    (** Create shipping_cost with an existing ShippingRate ID *)
+    let shipping_cost_rate ~shipping_rate () =
+      { shipping_rate = Some shipping_rate;
+        shipping_rate_data_display_name = None;
+        shipping_rate_data_type = None;
+        shipping_rate_data_fixed_amount = None;
+        shipping_rate_data_fixed_currency = None }
+
+    (** Create shipping_cost with inline fixed amount *)
+    let shipping_cost_fixed ~display_name ~amount ~currency () =
+      { shipping_rate = None;
+        shipping_rate_data_display_name = Some display_name;
+        shipping_rate_data_type = Some "fixed_amount";
+        shipping_rate_data_fixed_amount = Some amount;
+        shipping_rate_data_fixed_currency = Some currency }
+
+    (** Shipping details (address) for invoice *)
+    type shipping_details = {
+      name : string;
+      address_line1 : string option;
+      address_line2 : string option;
+      address_city : string option;
+      address_state : string option;
+      address_postal_code : string option;
+      address_country : string option;
+      phone : string option;
+    }
+
+    (** Create shipping_details with name only *)
+    let shipping_details_name ~name () =
+      { name; address_line1 = None; address_line2 = None;
+        address_city = None; address_state = None;
+        address_postal_code = None; address_country = None;
+        phone = None }
+
+    (** Create shipping_details with full address *)
+    let shipping_details_full ~name ?line1 ?line2 ?city ?state ?postal_code ?country ?phone () =
+      { name; address_line1 = line1; address_line2 = line2;
+        address_city = city; address_state = state;
+        address_postal_code = postal_code; address_country = country;
+        phone }
+
+    (** Discount to apply to an invoice *)
+    type discount = {
+      coupon : string option;          (** Coupon ID *)
+      discount : string option;        (** Existing discount ID to clone *)
+      promotion_code : string option;  (** Promotion code ID *)
+    }
+
+    (** Create discount from a coupon ID *)
+    let discount_coupon ~coupon () =
+      { coupon = Some coupon; discount = None; promotion_code = None }
+
+    (** Create discount from a promotion code ID *)
+    let discount_promotion_code ~promotion_code () =
+      { coupon = None; discount = None; promotion_code = Some promotion_code }
+
+    (** Create discount from an existing discount ID *)
+    let discount_existing ~discount () =
+      { coupon = None; discount = Some discount; promotion_code = None }
+
+    (** Transfer data for Connect platforms *)
+    type transfer_data = {
+      destination : string;   (** Connected account ID *)
+      amount : int option;    (** Amount to transfer (defaults to full amount) *)
+    }
+
+    (** Create transfer_data for Connect *)
+    let transfer_data ~destination ?amount () =
+      { destination; amount }
+
+    (** Issuer configuration for Connect *)
+    type issuer = {
+      issuer_type : string;    (** "account" or "self" *)
+      account : string option; (** Connected account ID when type is "account" *)
+    }
+
+    (** Create issuer for self *)
+    let issuer_self () = { issuer_type = "self"; account = None }
+
+    (** Create issuer for a connected account *)
+    let issuer_account ~account () = { issuer_type = "account"; account = Some account }
+
+    (** Create an invoice.
+        @param customer The customer ID
+        @param subscription Optional subscription ID to invoice
+        @param description Optional description
+        @param auto_advance Whether to auto-advance the invoice
+        @param collection_method How to collect payment
+        @param days_until_due Days until due (for Send_invoice collection)
+        @param due_date Unix timestamp for due date
+        @param automatic_tax Automatic tax configuration
+        @param payment_method_types List of allowed payment method types (e.g., ["card"; "bank_transfer"])
+        @param pending_invoice_items_behavior "include" or "exclude" pending items
+        @param custom_fields Up to 4 custom fields for the invoice
+        @param footer Footer text for the invoice
+        @param rendering Rendering options for invoice display
+        @param default_payment_method Default payment method ID
+        @param default_tax_rates Default tax rate IDs
+        @param currency Invoice currency
+        @param shipping_cost Shipping cost (rate ID or inline data)
+        @param shipping_details Shipping address details
+        @param discounts List of discounts to apply
+        @param application_fee_amount Application fee for Connect (in cents)
+        @param on_behalf_of Connected account ID for Connect
+        @param transfer_data Transfer data for Connect
+        @param issuer Issuer configuration for Connect
+        @param account_tax_ids Tax IDs for the account
+        @param statement_descriptor Statement descriptor for credit card
+        @param effective_at Effective date timestamp
+        @param metadata Key-value metadata *)
+    let create ~config ?idempotency_key ~customer ?subscription ?description
+        ?auto_advance ?collection_method ?days_until_due ?due_date
+        ?automatic_tax ?payment_method_types ?pending_invoice_items_behavior 
+        ?custom_fields ?footer ?rendering ?default_payment_method 
+        ?default_tax_rates ?currency ?shipping_cost ?shipping_details 
+        ?discounts ?application_fee_amount ?on_behalf_of ?transfer_data
+        ?issuer ?account_tax_ids ?statement_descriptor ?effective_at
+        ?metadata () =
+      let options = { default_request_options with idempotency_key } in
+      let params = [("customer", customer)] in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("subscription", v)) subscription;
+        Option.map (fun v -> ("description", v)) description;
+        Option.map (fun v -> ("auto_advance", string_of_bool v)) auto_advance;
+        Option.map (fun v -> ("collection_method", collection_method_to_string v)) collection_method;
+        Option.map (fun v -> ("days_until_due", string_of_int v)) days_until_due;
+        Option.map (fun v -> ("due_date", string_of_int v)) due_date;
+        Option.map (fun v -> ("pending_invoice_items_behavior", v)) pending_invoice_items_behavior;
+        Option.map (fun v -> ("footer", v)) footer;
+        Option.map (fun v -> ("default_payment_method", v)) default_payment_method;
+        Option.map (fun v -> ("currency", v)) currency;
+        Option.map (fun v -> ("application_fee_amount", string_of_int v)) application_fee_amount;
+        Option.map (fun v -> ("on_behalf_of", v)) on_behalf_of;
+        Option.map (fun v -> ("statement_descriptor", v)) statement_descriptor;
+        Option.map (fun v -> ("effective_at", string_of_int v)) effective_at;
+      ] in
+      (* Add automatic_tax configuration *)
+      let params = match automatic_tax with
+        | Some at ->
+          params @ [("automatic_tax[enabled]", string_of_bool at.enabled)] @
+          (match at.liability_type with
+           | Some lt -> [("automatic_tax[liability][type]", lt)]
+           | None -> []) @
+          (match at.liability_account with
+           | Some acc -> [("automatic_tax[liability][account]", acc)]
+           | None -> [])
+        | None -> params
+      in
+      (* Add payment_method_types as array *)
+      let params = match payment_method_types with
+        | Some types ->
+          params @ List.mapi (fun i t ->
+            (Printf.sprintf "payment_settings[payment_method_types][%d]" i, t)
+          ) types
+        | None -> params
+      in
+      (* Add custom_fields as array *)
+      let params = match custom_fields with
+        | Some fields ->
+          params @ List.concat (List.mapi (fun i (f : custom_field) ->
+            [(Printf.sprintf "custom_fields[%d][name]" i, f.name);
+             (Printf.sprintf "custom_fields[%d][value]" i, f.value)]
+          ) fields)
+        | None -> params
+      in
+      (* Add rendering options *)
+      let params = match rendering with
+        | Some r ->
+          params @
+          (match r.amount_tax_display with
+           | Some v -> [("rendering[amount_tax_display]", v)]
+           | None -> []) @
+          (match r.pdf_page_size with
+           | Some v -> [("rendering[pdf][page_size]", v)]
+           | None -> [])
+        | None -> params
+      in
+      (* Add default_tax_rates as array *)
+      let params = match default_tax_rates with
+        | Some rates ->
+          params @ List.mapi (fun i r ->
+            (Printf.sprintf "default_tax_rates[%d]" i, r)
+          ) rates
+        | None -> params
+      in
+      (* Add shipping_cost *)
+      let params = match shipping_cost with
+        | Some sc ->
+          params @
+          (match sc.shipping_rate with
+           | Some r -> [("shipping_cost[shipping_rate]", r)]
+           | None -> []) @
+          (match sc.shipping_rate_data_display_name with
+           | Some n -> [("shipping_cost[shipping_rate_data][display_name]", n)]
+           | None -> []) @
+          (match sc.shipping_rate_data_type with
+           | Some t -> [("shipping_cost[shipping_rate_data][type]", t)]
+           | None -> []) @
+          (match sc.shipping_rate_data_fixed_amount, sc.shipping_rate_data_fixed_currency with
+           | Some amt, Some curr ->
+             [("shipping_cost[shipping_rate_data][fixed_amount][amount]", string_of_int amt);
+              ("shipping_cost[shipping_rate_data][fixed_amount][currency]", curr)]
+           | _ -> [])
+        | None -> params
+      in
+      (* Add shipping_details *)
+      let params = match shipping_details with
+        | Some sd ->
+          params @ [("shipping_details[name]", sd.name)] @
+          List.filter_map Fun.id [
+            Option.map (fun v -> ("shipping_details[address][line1]", v)) sd.address_line1;
+            Option.map (fun v -> ("shipping_details[address][line2]", v)) sd.address_line2;
+            Option.map (fun v -> ("shipping_details[address][city]", v)) sd.address_city;
+            Option.map (fun v -> ("shipping_details[address][state]", v)) sd.address_state;
+            Option.map (fun v -> ("shipping_details[address][postal_code]", v)) sd.address_postal_code;
+            Option.map (fun v -> ("shipping_details[address][country]", v)) sd.address_country;
+            Option.map (fun v -> ("shipping_details[phone]", v)) sd.phone;
+          ]
+        | None -> params
+      in
+      (* Add discounts as array *)
+      let params = match discounts with
+        | Some ds ->
+          params @ List.concat (List.mapi (fun i (d : discount) ->
+            List.filter_map Fun.id [
+              Option.map (fun v -> (Printf.sprintf "discounts[%d][coupon]" i, v)) d.coupon;
+              Option.map (fun v -> (Printf.sprintf "discounts[%d][discount]" i, v)) d.discount;
+              Option.map (fun v -> (Printf.sprintf "discounts[%d][promotion_code]" i, v)) d.promotion_code;
+            ]
+          ) ds)
+        | None -> params
+      in
+      (* Add transfer_data for Connect *)
+      let params = match transfer_data with
+        | Some td ->
+          params @ [("transfer_data[destination]", td.destination)] @
+          (match td.amount with
+           | Some amt -> [("transfer_data[amount]", string_of_int amt)]
+           | None -> [])
+        | None -> params
+      in
+      (* Add issuer for Connect *)
+      let params = match issuer with
+        | Some iss ->
+          params @ [("issuer[type]", iss.issuer_type)] @
+          (match iss.account with
+           | Some acc -> [("issuer[account]", acc)]
+           | None -> [])
+        | None -> params
+      in
+      (* Add account_tax_ids as array *)
+      let params = match account_tax_ids with
+        | Some ids ->
+          params @ List.mapi (fun i id ->
+            (Printf.sprintf "account_tax_ids[%d]" i, id)
+          ) ids
+        | None -> params
+      in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      post ~config ~options ~path:"/v1/invoices" ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    (** Update a draft invoice.
+        @param id The invoice ID
+        @param description Optional description
+        @param auto_advance Whether to auto-advance the invoice
+        @param collection_method How to collect payment
+        @param days_until_due Days until due (for Send_invoice collection)
+        @param due_date Unix timestamp for due date
+        @param automatic_tax Automatic tax configuration
+        @param payment_method_types List of allowed payment method types
+        @param custom_fields Up to 4 custom fields for the invoice
+        @param footer Footer text for the invoice
+        @param rendering Rendering options for invoice display
+        @param default_payment_method Default payment method ID
+        @param default_tax_rates Default tax rate IDs
+        @param shipping_cost Shipping cost (rate ID or inline data)
+        @param shipping_details Shipping address details
+        @param discounts List of discounts to apply
+        @param application_fee_amount Application fee for Connect (in cents)
+        @param on_behalf_of Connected account ID for Connect
+        @param transfer_data Transfer data for Connect
+        @param issuer Issuer configuration for Connect
+        @param account_tax_ids Tax IDs for the account
+        @param statement_descriptor Statement descriptor for credit card
+        @param effective_at Effective date timestamp
+        @param metadata Key-value metadata *)
+    let update ~config ~id ?description ?auto_advance ?collection_method 
+        ?days_until_due ?due_date ?automatic_tax ?payment_method_types
+        ?custom_fields ?footer ?rendering ?default_payment_method 
+        ?default_tax_rates ?shipping_cost ?shipping_details 
+        ?discounts ?application_fee_amount ?on_behalf_of ?transfer_data
+        ?issuer ?account_tax_ids ?statement_descriptor ?effective_at ?metadata () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("description", v)) description;
+        Option.map (fun v -> ("auto_advance", string_of_bool v)) auto_advance;
+        Option.map (fun v -> ("collection_method", collection_method_to_string v)) collection_method;
+        Option.map (fun v -> ("days_until_due", string_of_int v)) days_until_due;
+        Option.map (fun v -> ("due_date", string_of_int v)) due_date;
+        Option.map (fun v -> ("footer", v)) footer;
+        Option.map (fun v -> ("default_payment_method", v)) default_payment_method;
+        Option.map (fun v -> ("application_fee_amount", string_of_int v)) application_fee_amount;
+        Option.map (fun v -> ("on_behalf_of", v)) on_behalf_of;
+        Option.map (fun v -> ("statement_descriptor", v)) statement_descriptor;
+        Option.map (fun v -> ("effective_at", string_of_int v)) effective_at;
+      ] in
+      (* Add automatic_tax configuration *)
+      let params = match automatic_tax with
+        | Some at ->
+          params @ [("automatic_tax[enabled]", string_of_bool at.enabled)] @
+          (match at.liability_type with
+           | Some lt -> [("automatic_tax[liability][type]", lt)]
+           | None -> []) @
+          (match at.liability_account with
+           | Some acc -> [("automatic_tax[liability][account]", acc)]
+           | None -> [])
+        | None -> params
+      in
+      (* Add payment_method_types as array *)
+      let params = match payment_method_types with
+        | Some types ->
+          params @ List.mapi (fun i t ->
+            (Printf.sprintf "payment_settings[payment_method_types][%d]" i, t)
+          ) types
+        | None -> params
+      in
+      (* Add custom_fields as array *)
+      let params = match custom_fields with
+        | Some fields ->
+          params @ List.concat (List.mapi (fun i (f : custom_field) ->
+            [(Printf.sprintf "custom_fields[%d][name]" i, f.name);
+             (Printf.sprintf "custom_fields[%d][value]" i, f.value)]
+          ) fields)
+        | None -> params
+      in
+      (* Add rendering options *)
+      let params = match rendering with
+        | Some r ->
+          params @
+          (match r.amount_tax_display with
+           | Some v -> [("rendering[amount_tax_display]", v)]
+           | None -> []) @
+          (match r.pdf_page_size with
+           | Some v -> [("rendering[pdf][page_size]", v)]
+           | None -> [])
+        | None -> params
+      in
+      (* Add default_tax_rates as array *)
+      let params = match default_tax_rates with
+        | Some rates ->
+          params @ List.mapi (fun i r ->
+            (Printf.sprintf "default_tax_rates[%d]" i, r)
+          ) rates
+        | None -> params
+      in
+      (* Add shipping_cost *)
+      let params = match shipping_cost with
+        | Some sc ->
+          params @
+          (match sc.shipping_rate with
+           | Some r -> [("shipping_cost[shipping_rate]", r)]
+           | None -> []) @
+          (match sc.shipping_rate_data_display_name with
+           | Some n -> [("shipping_cost[shipping_rate_data][display_name]", n)]
+           | None -> []) @
+          (match sc.shipping_rate_data_type with
+           | Some t -> [("shipping_cost[shipping_rate_data][type]", t)]
+           | None -> []) @
+          (match sc.shipping_rate_data_fixed_amount, sc.shipping_rate_data_fixed_currency with
+           | Some amt, Some curr ->
+             [("shipping_cost[shipping_rate_data][fixed_amount][amount]", string_of_int amt);
+              ("shipping_cost[shipping_rate_data][fixed_amount][currency]", curr)]
+           | _ -> [])
+        | None -> params
+      in
+      (* Add shipping_details *)
+      let params = match shipping_details with
+        | Some sd ->
+          params @ [("shipping_details[name]", sd.name)] @
+          List.filter_map Fun.id [
+            Option.map (fun v -> ("shipping_details[address][line1]", v)) sd.address_line1;
+            Option.map (fun v -> ("shipping_details[address][line2]", v)) sd.address_line2;
+            Option.map (fun v -> ("shipping_details[address][city]", v)) sd.address_city;
+            Option.map (fun v -> ("shipping_details[address][state]", v)) sd.address_state;
+            Option.map (fun v -> ("shipping_details[address][postal_code]", v)) sd.address_postal_code;
+            Option.map (fun v -> ("shipping_details[address][country]", v)) sd.address_country;
+            Option.map (fun v -> ("shipping_details[phone]", v)) sd.phone;
+          ]
+        | None -> params
+      in
+      (* Add discounts as array *)
+      let params = match discounts with
+        | Some ds ->
+          params @ List.concat (List.mapi (fun i (d : discount) ->
+            List.filter_map Fun.id [
+              Option.map (fun v -> (Printf.sprintf "discounts[%d][coupon]" i, v)) d.coupon;
+              Option.map (fun v -> (Printf.sprintf "discounts[%d][discount]" i, v)) d.discount;
+              Option.map (fun v -> (Printf.sprintf "discounts[%d][promotion_code]" i, v)) d.promotion_code;
+            ]
+          ) ds)
+        | None -> params
+      in
+      (* Add transfer_data for Connect *)
+      let params = match transfer_data with
+        | Some td ->
+          params @ [("transfer_data[destination]", td.destination)] @
+          (match td.amount with
+           | Some amt -> [("transfer_data[amount]", string_of_int amt)]
+           | None -> [])
+        | None -> params
+      in
+      (* Add issuer for Connect *)
+      let params = match issuer with
+        | Some iss ->
+          params @ [("issuer[type]", iss.issuer_type)] @
+          (match iss.account with
+           | Some acc -> [("issuer[account]", acc)]
+           | None -> [])
+        | None -> params
+      in
+      (* Add account_tax_ids as array *)
+      let params = match account_tax_ids with
+        | Some ids ->
+          params @ List.mapi (fun i id ->
+            (Printf.sprintf "account_tax_ids[%d]" i, id)
+          ) ids
+        | None -> params
+      in
+      let params = match metadata with
+        | Some m -> params @ List.map (fun (k, v) -> ("metadata[" ^ k ^ "]", v)) m
+        | None -> params
+      in
+      let path = path_with_id ~base:"/v1/invoices/" ~resource_type:"invoice" id in
+      post ~config ~path ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let finalize_invoice ~config ~id ?auto_advance () =
+      let params = List.filter_map Fun.id [
+        Option.map (fun v -> ("auto_advance", string_of_bool v)) auto_advance;
+      ] in
+      let path = path_with_id ~base:"/v1/invoices/" ~resource_type:"invoice" id in
+      post ~config ~path:(path ^ "/finalize") ~params () >>=
+      handle_response ~parse_ok:of_json
+
+    let send ~config ~id () =
+      let path = path_with_id ~base:"/v1/invoices/" ~resource_type:"invoice" id in
+      post ~config ~path:(path ^ "/send") () >>=
+      handle_response ~parse_ok:of_json
+
+    let mark_uncollectible ~config ~id () =
+      let path = path_with_id ~base:"/v1/invoices/" ~resource_type:"invoice" id in
+      post ~config ~path:(path ^ "/mark_uncollectible") () >>=
+      handle_response ~parse_ok:of_json
+
+    (** Subscription item for upcoming invoice preview.
+        Used to simulate changes to a subscription. *)
+    type upcoming_subscription_item = {
+      id : string option;       (** Existing subscription item ID (si_xxx) for updates *)
+      price : string option;    (** Price ID for new or updated item *)
+      quantity : int option;    (** Quantity for the item *)
+      deleted : bool option;    (** Set to true to remove this item *)
+    }
+
+    (** Create an upcoming subscription item for adding a new price *)
+    let upcoming_item_add ~price ?quantity () =
+      { id = None; price = Some price; quantity; deleted = None }
+
+    (** Create an upcoming subscription item for updating an existing item *)
+    let upcoming_item_update ~id ?price ?quantity () =
+      { id = Some id; price; quantity; deleted = None }
+
+    (** Create an upcoming subscription item for deleting an existing item *)
+    let upcoming_item_delete ~id () =
+      { id = Some id; price = None; quantity = None; deleted = Some true }
+
+    (** Preview an upcoming invoice.
+        @param customer The customer ID
+        @param subscription Optional existing subscription ID to preview changes to
+        @param subscription_items List of item changes to simulate
+        @param subscription_proration_behavior How to handle proration
+        @param subscription_proration_date Timestamp for proration calculation *)
+    let upcoming ~config ~customer ?subscription ?subscription_items
+        ?subscription_proration_behavior ?subscription_proration_date () =
+      let params = [("customer", customer)] in
+      let params = params @ List.filter_map Fun.id [
+        Option.map (fun v -> ("subscription", v)) subscription;
+        Option.map (fun v -> ("subscription_proration_behavior", v)) subscription_proration_behavior;
+        Option.map (fun v -> ("subscription_proration_date", string_of_int v)) subscription_proration_date;
+      ] in
+      (* Build subscription_items array *)
+      let params = match subscription_items with
+        | Some items ->
+          params @ List.concat (List.mapi (fun i item ->
+            let base = Printf.sprintf "subscription_items[%d]" i in
+            List.filter_map Fun.id [
+              Option.map (fun v -> (base ^ "[id]", v)) item.id;
+              Option.map (fun v -> (base ^ "[price]", v)) item.price;
+              Option.map (fun v -> (base ^ "[quantity]", string_of_int v)) item.quantity;
+              Option.map (fun v -> (base ^ "[deleted]", string_of_bool v)) item.deleted;
+            ]
+          ) items)
+        | None -> params
+      in
+      get ~config ~path:"/v1/invoices/upcoming" ~params () >>=
       handle_response ~parse_ok:of_json
   end
 
