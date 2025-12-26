@@ -1,0 +1,9 @@
+(test
+ (name test_stripe_sane)
+ (modules test_stripe_sane)
+ (libraries stripe-sane stripe stripe-core alcotest))
+
+(library
+ (name test_lwt_compat)
+ (modules test_lwt_compat)
+ (libraries stripe-sane stripe-lwt lwt))

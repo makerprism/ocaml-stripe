@@ -25,6 +25,7 @@ OCaml SDK for the Stripe API. Process payments, manage customers, handle subscri
 | `stripe-core` | Core interfaces and types (runtime-agnostic) |
 | `stripe-lwt` | Lwt runtime adapter with full API client |
 | `stripe` | Stripe resource types and parsing |
+| `stripe-sane` | **Experimental** - Opinionated convenience helpers (customer deduplication, subscription guards) |
 
 ## Installation
 
@@ -226,6 +227,75 @@ let handle_webhook ~payload ~sig_header ~webhook_secret =
   | exn ->
     Error (Printf.sprintf "Error: %s" (Printexc.to_string exn))
 ```
+
+### Convenience Helpers (stripe-sane)
+
+> **Experimental**: `stripe-sane` provides opinionated helpers for common patterns.
+> These are NOT part of the official Stripe API - official SDKs intentionally leave
+> these patterns to application developers.
+
+The `stripe-sane` package helps prevent common issues like duplicate customers and subscriptions:
+
+```ocaml
+open Lwt.Syntax
+
+(* Define a client adapter (do this once in your project) *)
+module Lwt_client : Stripe_sane.STRIPE_CLIENT with type 'a io = 'a Lwt.t = struct
+  type 'a io = 'a Lwt.t
+  let bind = Lwt.bind
+  let return = Lwt.return
+
+  module Customer = struct
+    let list = Stripe_lwt.Client.Customer.list
+    let create = Stripe_lwt.Client.Customer.create
+  end
+
+  module Subscription = struct
+    let list = Stripe_lwt.Client.Subscription.list
+    let create ~config ~customer ~price ?idempotency_key
+        ?default_payment_method ?trial_period_days ?coupon ?promotion_code
+        ?automatic_tax ?description ?metadata () =
+      Stripe_lwt.Client.Subscription.create
+        ~config ~customer ~price ?idempotency_key
+        ?default_payment_method ?trial_period_days ?coupon ?promotion_code
+        ?automatic_tax ?description ?metadata ()
+  end
+end
+
+module Sane = Stripe_sane.Make (Lwt_client)
+
+(* Get or create a customer by email - no duplicates *)
+let get_customer config email =
+  let* result = Sane.Customer.get_or_create ~config ~email () in
+  match result with
+  | Ok (Stripe_sane.Found customer) -> 
+    Printf.printf "Found existing customer: %s\n" customer.id;
+    Lwt.return_ok customer
+  | Ok (Stripe_sane.Created customer) -> 
+    Printf.printf "Created new customer: %s\n" customer.id;
+    Lwt.return_ok customer
+  | Error e -> 
+    Lwt.return_error e
+
+(* Create subscription only if not already subscribed to this price *)
+let subscribe_customer config ~customer_id ~price_id =
+  let* result = Sane.Subscription.create_if_not_subscribed 
+    ~config ~customer:customer_id ~price:price_id () in
+  match result with
+  | Ok sub -> 
+    Printf.printf "Created subscription: %s\n" sub.id;
+    Lwt.return_ok sub
+  | Error (Stripe_sane.Already_subscribed existing) ->
+    Printf.printf "Already subscribed: %s\n" existing.id;
+    Lwt.return_ok existing
+  | Error (Stripe_sane.Stripe_error e) ->
+    Lwt.return_error e
+```
+
+Key features:
+- **Email normalization**: Emails are lowercased and trimmed for consistent lookups
+- **Idempotency keys**: Automatic idempotency keys prevent race conditions
+- **Pagination**: Subscription checks paginate through all results
 
 ## Architecture
 

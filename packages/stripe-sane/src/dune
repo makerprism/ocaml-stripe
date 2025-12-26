@@ -1,0 +1,4 @@
+(library
+ (name stripe_sane)
+ (public_name stripe-sane)
+ (libraries stripe-core stripe yojson))

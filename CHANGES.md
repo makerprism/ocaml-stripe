@@ -9,6 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Initial release of ocaml-stripe SDK
+- **stripe-sane** (Experimental): Opinionated convenience helpers for common Stripe patterns
+  - `Customer.get_or_create`: Find or create customer by email with automatic deduplication
+    - Email normalization (lowercase, trim) for consistent lookups
+    - Idempotency keys to prevent race conditions
+  - `Subscription.create_if_not_subscribed`: Create subscription only if customer doesn't already have one
+    - Checks both `active` and `trialing` subscriptions
+    - Pagination support for customers with many subscriptions
+    - Common parameters: `trial_period_days`, `coupon`, `promotion_code`, `automatic_tax`, `metadata`
+  - Functor-based design works with any async runtime (Lwt, Eio, etc.)
 - **stripe-core**: Core types, interfaces, and webhook signature verification
   - HTTP method and response types
   - Stripe error types and parsing

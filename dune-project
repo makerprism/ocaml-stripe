@@ -50,3 +50,15 @@
   yojson
   uri
   (alcotest :with-test)))
+
+(package
+ (name stripe-sane)
+ (synopsis "Opinionated convenience helpers for Stripe")
+ (description "Higher-level patterns for common Stripe operations like customer deduplication by email and preventing duplicate subscriptions. This is NOT part of the official Stripe API - it provides opinionated helpers that official SDKs intentionally leave to application developers.")
+ (depends
+  (ocaml (>= 4.14))
+  (dune (>= 3.0))
+  (stripe-core (= :version))
+  (stripe (= :version))
+  yojson
+  (alcotest :with-test)))
