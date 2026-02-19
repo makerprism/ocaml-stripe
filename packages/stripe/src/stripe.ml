@@ -1264,6 +1264,21 @@ module Checkout_session = struct
     quantity : int option;
   }
 
+  (** How promotion codes / discounts are handled on a Checkout Session.
+
+      Stripe does not allow [allow_promotion_codes] and [discounts] in the same
+      request.  This ADT makes the mutual exclusion a compile-time guarantee.
+
+      - [Allow_promotion_codes] — render the manual promotion-code input field
+        so the customer can type a code at checkout.
+      - [Discounts of (string * string) list list] — pre-apply one or more
+        discounts.  Each inner list is an assoc-list with optional keys
+        ["coupon"] and/or ["promotion_code"].
+      - Omit the parameter entirely to use neither. *)
+  type checkout_promotion =
+    | Allow_promotion_codes
+    | Discounts of (string * string) list list
+
   type t = {
     id : string;
     object_ : string;

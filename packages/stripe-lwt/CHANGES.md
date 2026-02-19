@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING**: `Checkout_session.create` replaces `?allow_promotion_codes` and
+  `?discounts` with a single `?promotion` parameter of type
+  `Stripe.Checkout_session.checkout_promotion`.  This prevents the Stripe API
+  error "You may only specify one of these parameters" at compile time.
+
 ### Added
 
 - Initial release

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `Checkout_session.checkout_promotion` ADT enforcing mutual exclusion between
+  `allow_promotion_codes` and `discounts` at the type level
 - Initial release with 33 Stripe resource types
 - **Core Payments**: PaymentIntent, PaymentMethod, SetupIntent, Charge, Refund
 - **Checkout**: CheckoutSession, PaymentLink
