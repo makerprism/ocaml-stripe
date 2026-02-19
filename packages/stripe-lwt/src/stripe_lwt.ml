@@ -1989,12 +1989,15 @@ module Client = struct
         @param mode "payment", "subscription", or "setup"
         @param success_url URL to redirect after successful payment
         @param cancel_url URL to redirect if customer cancels
-        @param allow_promotion_codes Enable promotion code input field
-        @param discounts List of coupon IDs to apply (e.g., [("coupon", "SAVE20")])
+        @param promotion How to handle promotion codes / discounts.
+          Use [Allow_promotion_codes] to show the manual code input field,
+          or [Discounts items] to pre-apply specific coupons/promotion codes.
+          Omit to use neither.  The ADT prevents passing both at once, which
+          the Stripe API rejects.
         @param line_items List of (price_id, quantity) tuples *)
-    let create ~config ~mode ~success_url ~cancel_url 
+    let create ~config ~mode ~success_url ~cancel_url
         ?idempotency_key ?customer ?customer_email ?client_reference_id
-        ?allow_promotion_codes ?discounts
+        ?promotion
         ?line_items ?metadata () =
       let options = { default_request_options with idempotency_key } in
       let params = [
@@ -2006,15 +2009,16 @@ module Client = struct
         Option.map (fun v -> ("customer", v)) customer;
         Option.map (fun v -> ("customer_email", v)) customer_email;
         Option.map (fun v -> ("client_reference_id", v)) client_reference_id;
-        Option.map (fun v -> ("allow_promotion_codes", string_of_bool v)) allow_promotion_codes;
       ] in
-      (* Add discounts - each discount can have a coupon or promotion_code *)
-      let params = match discounts with
-        | Some items -> params @ List.concat (List.mapi (fun i discount ->
+      let params = match promotion with
+        | Some Stripe.Checkout_session.Allow_promotion_codes ->
+          params @ [("allow_promotion_codes", "true")]
+        | Some (Stripe.Checkout_session.Discounts items) ->
+          params @ List.concat (List.mapi (fun i discount ->
             List.filter_map Fun.id [
-              Option.map (fun c -> (Printf.sprintf "discounts[%d][coupon]" i, c)) 
+              Option.map (fun c -> (Printf.sprintf "discounts[%d][coupon]" i, c))
                 (List.assoc_opt "coupon" discount);
-              Option.map (fun p -> (Printf.sprintf "discounts[%d][promotion_code]" i, p)) 
+              Option.map (fun p -> (Printf.sprintf "discounts[%d][promotion_code]" i, p))
                 (List.assoc_opt "promotion_code" discount);
             ]
           ) items)
