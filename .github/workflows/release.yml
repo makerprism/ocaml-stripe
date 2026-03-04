@@ -7,7 +7,7 @@ on:
 
 jobs:
   create-release:
-    runs-on: self-hosted
+    runs-on: ubicloud-standard-2
     steps:
       - uses: actions/checkout@v4
       - name: Parse tag
