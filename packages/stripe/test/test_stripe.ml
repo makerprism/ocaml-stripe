@@ -297,6 +297,39 @@ let test_subscription_status_variants () =
   test_status "trialing" Subscription.Trialing;
   test_status "paused" Subscription.Paused
 
+(** Test Subscription parsing with null period timestamps *)
+let test_subscription_null_period () =
+  let json = Yojson.Safe.from_string {|
+    {
+      "id": "sub_456",
+      "object": "subscription",
+      "cancel_at_period_end": false,
+      "current_period_end": null,
+      "current_period_start": null,
+      "customer": "cus_456",
+      "livemode": false,
+      "status": "active"
+    }
+  |} in
+  let sub = Subscription.of_json json in
+  check bool "current_period_end is None" true (sub.current_period_end = None);
+  check bool "current_period_start is None" true (sub.current_period_start = None);
+  let json2 = Yojson.Safe.from_string {|
+    {
+      "id": "sub_789",
+      "object": "subscription",
+      "cancel_at_period_end": false,
+      "current_period_end": 1694725031,
+      "current_period_start": 1694725031,
+      "customer": "cus_789",
+      "livemode": false,
+      "status": "active"
+    }
+  |} in
+  let sub2 = Subscription.of_json json2 in
+  check bool "current_period_end is Some" true (sub2.current_period_end = Some 1694725031);
+  check bool "current_period_start is Some" true (sub2.current_period_start = Some 1694725031)
+
 (** Test error type variants *)
 let test_error_type_variants () =
   check bool "api_error" true (Core.error_type_of_string "api_error" = Core.Api_error);
@@ -968,6 +1001,7 @@ let () =
     ];
     "Subscription", [
       test_case "status variants" `Quick test_subscription_status_variants;
+      test_case "null period timestamps" `Quick test_subscription_null_period;
     ];
     "PaymentMethod", [
       test_case "parsing" `Quick test_payment_method_parsing;

@@ -782,8 +782,8 @@ module Subscription = struct
     collection_method : collection_method option;
     created : int;
     currency : string option;
-    current_period_end : int;
-    current_period_start : int;
+    current_period_end : int option;
+    current_period_start : int option;
     customer : string;
     days_until_due : int option;
     (* Payment *)
@@ -827,8 +827,8 @@ module Subscription = struct
                           |> Option.map collection_method_of_string;
       created = json |> member "created" |> to_int_option |> Option.value ~default:0;
       currency = json |> member "currency" |> to_string_option;
-      current_period_end = json |> member "current_period_end" |> to_int;
-      current_period_start = json |> member "current_period_start" |> to_int;
+      current_period_end = json |> member "current_period_end" |> to_int_option;
+      current_period_start = json |> member "current_period_start" |> to_int_option;
       customer = json |> member "customer" |> to_string;
       days_until_due = json |> member "days_until_due" |> to_int_option;
       default_payment_method = json |> member "default_payment_method" |> to_string_option;
